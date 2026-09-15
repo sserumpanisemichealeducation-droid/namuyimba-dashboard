@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NAMUYIMBA and SONS Property Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --card: #ffffff; --primary: #2f6b4f; --primary-dark: #234f3a;
+    --accent: #c98a3b; --text: #23302a; --muted: #6b7a72; --border: #dfe6e1;
+    --danger: #b1443b; --warn: #c98a3b; --ok: #2f6b4f;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--primary-dark); color: white; padding: 16px 20px; }
+  header h1 { margin: 0; font-size: 1.25rem; }
+  header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.85; }
+
+  nav { display: flex; gap: 4px; background: var(--primary); padding: 0 12px; overflow-x: auto; }
+  nav button { background: transparent; border: none; color: white; padding: 12px 14px; font-size: 0.85rem; cursor: pointer; opacity: 0.75; border-bottom: 3px solid transparent; white-space: nowrap; }
+  nav button.active { opacity: 1; border-bottom: 3px solid var(--accent); font-weight: 600; }
+
+  main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: box-shadow .15s; }
+  .card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card .num { font-size: 1.35rem; font-weight: 700; color: var(--primary-dark); }
+  .card .label { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
+  .card.owed .num { color: var(--danger); }
+  .card.top .num { font-size: 1.05rem; color: var(--accent); }
+
+  .area-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .area-card h4 { margin: 0 0 8px; color: var(--primary-dark); font-size: 1rem; }
+  .area-card .stat-row { display: flex; justify-content: space-between; font-size: 0.82rem; padding: 3px 0; }
+  .area-card .stat-row span:last-child { font-weight: 600; }
+  .area-card .units-tag { font-size: 0.72rem; color: var(--muted); }
+  .area-card.best { border: 2px solid var(--accent); }
+
+  .section-title { font-size: 1.05rem; font-weight: 700; margin: 18px 0 10px; color: var(--primary-dark); }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .btn { background: var(--primary); color: white; border: none; padding: 9px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; }
+  .btn.secondary { background: var(--muted); }
+  .btn.danger { background: var(--danger); }
+  .btn.whatsapp { background: #25976a; }
+  .btn.small { padding: 5px 9px; font-size: 0.75rem; }
+  .btn:active { opacity: 0.85; }
+
+  input, select, textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; font-family: inherit; background: white; color: var(--text); }
+  label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 3px; margin-top: 10px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 9px 8px; font-size: 0.8rem; border-bottom: 1px solid var(--border); }
+  th { background: #eef2f0; color: var(--muted); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+
+  .badge { padding: 3px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+  .badge.active { background: #e3f0e8; color: var(--ok); }
+  .badge.vacated { background: #eee; color: var(--muted); }
+  .badge.owed { background: #fbe7e5; color: var(--danger); }
+  .badge.clear { background: #e3f0e8; color: var(--ok); }
+  .badge.pending { background: #fbeedd; color: var(--warn); }
+  .badge.new { background: #fbe7e5; color: var(--danger); }
+  .badge.done, .badge.resolved { background: #e3f0e8; color: var(--ok); }
+
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); align-items: flex-end; justify-content: center; z-index: 50; }
+  .modal-bg.active { display: flex; }
+  .modal { background: white; width: 100%; max-width: 480px; border-radius: 16px 16px 0 0; padding: 20px; max-height: 88vh; overflow-y: auto; }
+  .modal h3 { margin-top: 0; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions .btn { flex: 1; }
+
+  .empty { text-align: center; color: var(--muted); padding: 30px 10px; font-size: 0.9rem; }
+  .row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .icon-btn { background: none; border: none; cursor: pointer; font-size: 0.95rem; padding: 2px 4px; color: var(--muted); }
+  .status-banner { font-size: 0.75rem; color: var(--muted); text-align: center; padding: 6px; }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .filter-row select { max-width: 180px; }
+  .back-link-inline { background: none; border: none; color: var(--primary); font-size: 0.82rem; cursor: pointer; text-decoration: underline; padding: 0; margin-bottom: 12px; }
+
+  #role-gate { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .gate-box { background: var(--card); border-radius: 16px; padding: 28px 22px; max-width: 400px; width: 100%; text-align: center; border: 1px solid var(--border); }
+  .gate-box h2 { margin-top: 0; color: var(--primary-dark); font-size: 1.2rem; }
+  .gate-box p { color: var(--muted); font-size: 0.85rem; }
+  .gate-box .btn { width: 100%; margin-top: 10px; padding: 12px; font-size: 0.95rem; }
+  .gate-box .btn.secondary { background: var(--accent); }
+  .gate-error { color: var(--danger); font-size: 0.8rem; margin-top: 6px; display: none; }
+
+  #tenant-app { display: none; max-width: 480px; margin: 0 auto; padding: 20px 16px; }
+  #tenant-app .confirm { display: none; text-align: center; padding: 30px 10px; }
+  #tenant-app .confirm .checkmark { font-size: 2.5rem; }
+  #app-shell { display: none; }
+  .back-link { background: none; border: none; color: white; opacity: 0.85; font-size: 0.8rem; cursor: pointer; text-decoration: underline; padding: 0; }
+</style>
+</head>
+<body>
+
+<div id="role-gate">
+  <div class="gate-box">
+    <h2>🏠 NAMUYIMBA and SONS</h2>
+    <p>Property Dashboard — please choose how you're using this today.</p>
+    <div id="gate-buttons">
+      <button class="btn" id="gate-admin">I'm Property Staff / Admin</button>
+      <button class="btn secondary" id="gate-tenant">I'm a Tenant</button>
+      <p style="font-size:0.72rem; margin-top:14px;">Tenants can only submit a complaint or request here — staff data isn't shown.</p>
+    </div>
+    <div id="gate-password-form" style="display:none;">
+      <label style="text-align:left;">Enter admin password</label>
+      <input type="password" id="gate-password-input" placeholder="Password">
+      <div class="gate-error" id="gate-error">Incorrect password. Try again.</div>
+      <button class="btn" id="gate-password-submit">Enter</button>
+      <button class="btn secondary" id="gate-password-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="tenant-app">
+  <div style="margin-bottom:8px;">
+    <button class="back-link-inline" id="tenant-back-top" style="color:var(--primary);">← Back to welcome page</button>
+  </div>
+  <header style="border-radius:14px; margin-bottom:16px;">
+    <h1>NAMUYIMBA and SONS</h1>
+    <p>Submit a complaint or request to property management</p>
+  </header>
+  <div id="tenant-form-wrap">
+    <label>Area</label>
+    <select id="c-area">
+      <option value="Kiwenda">Kiwenda</option>
+      <option value="Watuba">Watuba</option>
+      <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+      <option value="Bunamwaya">Bunamwaya</option>
+    </select>
+    <label>Unit / Room number</label>
+    <input id="c-unit" placeholder="e.g. Unit 4">
+    <label>Your name</label>
+    <input id="c-name" placeholder="e.g. John Mukasa">
+    <label>Phone number (optional)</label>
+    <input id="c-phone" placeholder="e.g. 07XXXXXXXX">
+    <label>Your complaint / request</label>
+    <textarea id="c-message" rows="4" placeholder="Describe the issue..."></textarea>
+    <div style="margin-top:10px;">
+      <button class="btn secondary" id="c-record-btn" type="button">🎤 Record voice note</button>
+      <span id="c-record-timer" style="font-size:0.75rem; color:var(--muted); margin-left:8px;"></span>
+      <div id="c-voice-preview" style="margin-top:8px; display:none;">
+        <audio id="c-voice-audio" controls style="width:100%;"></audio>
+        <button class="icon-btn" id="c-voice-delete" title="Remove recording">🗑️ Remove recording</button>
+      </div>
+      <div id="c-voice-error" style="font-size:0.75rem; color:var(--danger); margin-top:4px; display:none;"></div>
+    </div>
+    <button class="btn" id="c-submit" style="width:100%; margin-top:16px;">Submit</button>
+  </div>
+  <div class="confirm" id="tenant-confirm">
+    <div class="checkmark">✅</div>
+    <h3>Thank you — your message has been sent to property management.</h3>
+    <button class="btn" id="c-another">Submit another</button>
+  </div>
+  <div style="text-align:center; margin-top:20px;">
+    <button class="back-link" id="tenant-back">← Back</button>
+  </div>
+</div>
+
+<div id="app-shell">
+<header>
+  <h1>🏠 NAMUYIMBA and SONS</h1>
+  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> &nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></p>
+  <input type="file" id="restore-file-input" accept="application/json" style="display:none;">
+</header>
+
+<nav>
+  <button class="tab-btn active" data-view="overview">Overview</button>
+  <button class="tab-btn" data-view="tenants">Tenants &amp; Balances</button>
+  <button class="tab-btn" data-view="payments">Payments</button>
+  <button class="tab-btn" data-view="complaints">Complaints</button>
+  <button class="tab-btn" data-view="activities">Activity Log</button>
+</nav>
+
+<main>
+
+  <div id="view-overview" class="view active">
+    <div class="cards" id="overview-cards"></div>
+    <div class="section-title">By Area</div>
+    <div class="area-cards" id="area-cards"></div>
+    <div class="section-title">Recent Payments</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Area</th><th>Tenant</th><th>Amount</th><th>Note</th></tr></thead>
+        <tbody id="recent-payments-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-monthly" class="view">
+    <button class="back-link-inline" onclick="activateView('overview')">← Back to Overview</button>
+    <div class="section-title" style="margin-top:0;">Amount Collected by Month</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Month</th><th>Amount Collected</th></tr></thead>
+        <tbody id="monthly-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-tenants" class="view">
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;">Tenants &amp; Balances</div>
+      <button class="btn" id="add-tenant-btn">+ Add Tenant</button>
+    </div>
+    <div class="filter-row">
+      <select id="tenant-filter-area">
+        <option value="">All areas</option>
+        <option value="Kiwenda">Kiwenda</option>
+        <option value="Watuba">Watuba</option>
+        <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+        <option value="Bunamwaya">Bunamwaya</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Area</th><th>Unit</th><th>Tenant</th><th>WhatsApp</th><th>Rent</th><th>Balance Owed</th><th>Status</th><th></th></tr></thead>
+        <tbody id="tenants-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-payments" class="view">
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;">Payments Ledger</div>
+      <button class="btn" id="add-payment-btn">+ Record Payment</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Area</th><th>Tenant</th><th>Type</th><th>Amount</th><th>Received By</th><th>Paid By</th><th>Note</th><th></th></tr></thead>
+        <tbody id="ledger-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-complaints" class="view">
+    <div class="section-title" style="margin:0 0 10px;">Tenant Complaints &amp; Requests</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Area / Unit</th><th>Tenant</th><th>Message</th><th>Status</th><th></th></tr></thead>
+        <tbody id="complaints-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-activities" class="view">
+    <div class="toolbar">
+      <div class="section-title" style="margin:0;">Activity Log</div>
+      <button class="btn" id="add-activity-btn">+ Log Activity</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date</th><th>Area / Unit</th><th>Type</th><th>Details</th><th>Entered By</th><th>Status</th><th></th></tr></thead>
+        <tbody id="activities-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<div class="status-banner" id="status-banner">Loading...</div>
+</div>
+
+<div class="modal-bg" id="tenant-modal-bg">
+  <div class="modal">
+    <h3 id="tenant-modal-title">Add Tenant</h3>
+    <input type="hidden" id="tenant-id">
+    <label>Area</label>
+    <select id="tenant-area">
+      <option value="Kiwenda">Kiwenda</option>
+      <option value="Watuba">Watuba</option>
+      <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+      <option value="Bunamwaya">Bunamwaya</option>
+    </select>
+    <label>Unit name / number</label>
+    <input id="tenant-unit" placeholder="e.g. Unit 3">
+    <label>Tenant name</label>
+    <input id="tenant-name" placeholder="e.g. John Mukasa">
+    <label>WhatsApp number (used for receipts)</label>
+    <input id="tenant-whatsapp" placeholder="e.g. 07XXXXXXXX">
+    <label>Other phone number</label>
+    <input id="tenant-other-phone" placeholder="e.g. 07XXXXXXXX">
+    <label>Date moved in</label>
+    <input id="tenant-movein" type="date">
+    <label>Monthly rent (UGX)</label>
+    <input id="tenant-rent" type="number" placeholder="e.g. 500000">
+    <label>Opening balance owed (UGX, if any — for debt before this system started)</label>
+    <input id="tenant-opening-balance" type="number" placeholder="0">
+    <label>Status</label>
+    <select id="tenant-status">
+      <option value="Active">Active</option>
+      <option value="Vacated">Vacated</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn secondary" id="tenant-cancel">Cancel</button>
+      <button class="btn" id="tenant-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="payment-modal-bg">
+  <div class="modal">
+    <h3 id="payment-modal-title">Record Payment</h3>
+    <input type="hidden" id="payment-edit-id">
+    <label>Area</label>
+    <select id="payment-area">
+      <option value="">None</option>
+      <option value="Kiwenda">Kiwenda</option>
+      <option value="Watuba">Watuba</option>
+      <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+      <option value="Bunamwaya">Bunamwaya</option>
+    </select>
+    <label>Tenant</label>
+    <select id="payment-tenant">
+      <option value="">None</option>
+    </select>
+    <label>Date</label>
+    <input id="payment-date" type="date">
+    <label>Amount (UGX)</label>
+    <input id="payment-amount" type="number" placeholder="e.g. 500000">
+    <label>Received by</label>
+    <select id="payment-receivedby">
+      <option>Salongo Namuyimba Paul</option>
+      <option>Nalongo Namuyimba Sylvia</option>
+      <option>SSERUMPANISE MICHEAL</option>
+      <option>Ssekiranda Moses</option>
+      <option>Ssebuufu Henry</option>
+    </select>
+    <label>Paid by</label>
+    <select id="payment-paidby">
+      <option>Cash</option>
+      <option>Mobile Money</option>
+      <option>Bank</option>
+    </select>
+    <label>Note (optional)</label>
+    <input id="payment-note" placeholder="e.g. September rent">
+    <div class="modal-actions">
+      <button class="btn secondary" id="payment-cancel">Cancel</button>
+      <button class="btn" id="payment-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="activity-modal-bg">
+  <div class="modal">
+    <h3 id="activity-modal-title">Log Activity</h3>
+    <input type="hidden" id="activity-id">
+    <label>Date</label>
+    <input id="activity-date" type="date">
+    <label>Area</label>
+    <select id="activity-area">
+      <option value="">— Not area specific —</option>
+      <option value="Kiwenda">Kiwenda</option>
+      <option value="Watuba">Watuba</option>
+      <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+      <option value="Bunamwaya">Bunamwaya</option>
+    </select>
+    <label>Unit / Tenant</label>
+    <select id="activity-unit"></select>
+    <label>Type</label>
+    <select id="activity-type">
+      <option>Maintenance</option>
+      <option>Water leakage</option>
+      <option>Painting</option>
+      <option>Repairs</option>
+      <option>Inspection</option>
+      <option>Move-in</option>
+      <option>Move-out</option>
+      <option>Other</option>
+    </select>
+    <label>Details</label>
+    <textarea id="activity-details" rows="3" placeholder="e.g. Leaking tap repaired"></textarea>
+    <label>Entered by</label>
+    <select id="activity-enteredby">
+      <option>Salongo Namuyimba Paul</option>
+      <option>Nalongo Namuyimba Sylvia</option>
+      <option>SSERUMPANISE MICHEAL</option>
+      <option>Ssekiranda Moses</option>
+      <option>Ssebuufu Henry</option>
+    </select>
+    <label>Status</label>
+    <select id="activity-status">
+      <option>Pending</option>
+      <option>Done</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn secondary" id="activity-cancel">Cancel</button>
+      <button class="btn" id="activity-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase (free tier) gives this dashboard a shared, real-time database so every
+     admin — on any device, anywhere with internet — sees the same live data. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+// ======================================================================
+// PASTE YOUR OWN FIREBASE PROJECT CONFIG HERE (see setup instructions).
+// This is safe to be public in the page — Firestore security rules,
+// not this config, are what control who can read/write.
+// ======================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCRQ8tEdLVWj8iSN1MTGzL1WG4bxosaSQI",
+  authDomain: "namuyimba-dashboard.firebaseapp.com",
+  projectId: "namuyimba-dashboard",
+  storageBucket: "namuyimba-dashboard.firebasestorage.app",
+  messagingSenderId: "254838906552",
+  appId: "1:254838906552:web:b01e50ea678ba609079e4d",
+  measurementId: "G-7E4PMSG5ZF"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+try { db.enablePersistence({ synchronizeTabs: true }); } catch (e) { /* fine if unsupported */ }
+
+// Silent, invisible sign-in (no login screen) — this only exists so Firestore's
+// security rules can require "must be signed in" for reads/writes, which keeps
+// random internet bots out even though there's no separate admin account system.
+// Both the admin app and the tenant complaint page share this same sign-in.
+const authReady = firebase.auth().signInAnonymously()
+  .then(() => true)
+  .catch(err => { console.error('Firebase auth error:', err); return false; });
+
+let fsListenersStarted = false;
+function startRealtimeSync() {
+  if (fsListenersStarted) return;
+  fsListenersStarted = true;
+  banner.textContent = 'Connecting to shared database...';
+  db.collection('tenants').onSnapshot(snap => {
+    tenants = snap.docs.map(d => d.data());
+    renderAll();
+    banner.textContent = 'Connected — showing live shared data';
+  }, err => { banner.textContent = 'Connection issue: ' + err.message; });
+  db.collection('ledger').onSnapshot(snap => {
+    ledger = snap.docs.map(d => d.data());
+    renderAll();
+  }, err => { banner.textContent = 'Connection issue: ' + err.message; });
+  db.collection('complaints').onSnapshot(snap => {
+    complaints = snap.docs.map(d => d.data());
+    renderAll();
+  }, err => { banner.textContent = 'Connection issue: ' + err.message; });
+  db.collection('activities').onSnapshot(snap => {
+    activities = snap.docs.map(d => d.data());
+    renderAll();
+  }, err => { banner.textContent = 'Connection issue: ' + err.message; });
+}
+
+async function fsSetTenant(t) { try { await db.collection('tenants').doc(t.id).set(t); } catch(e){ alert('Save failed: ' + e.message); } }
+async function fsDeleteTenant(id) { try { await db.collection('tenants').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
+async function fsSetLedger(l) { try { await db.collection('ledger').doc(l.id).set(l); } catch(e){ alert('Save failed: ' + e.message); } }
+async function fsDeleteLedger(id) { try { await db.collection('ledger').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
+async function fsSetComplaint(c) { try { await db.collection('complaints').doc(c.id).set(c); } catch(e){ alert('Save failed: ' + e.message); } }
+async function fsDeleteComplaint(id) { try { await db.collection('complaints').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
+async function fsSetActivity(a) { try { await db.collection('activities').doc(a.id).set(a); } catch(e){ alert('Save failed: ' + e.message); } }
+async function fsDeleteActivity(id) { try { await db.collection('activities').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
+// Atomically hands out the next receipt number so two admins sending receipts
+// at the same moment never get the same number.
+async function fsNextReceiptNumber() {
+  const ref = db.collection('meta').doc('counters');
+  return db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    const current = doc.exists ? Number(doc.data().receiptCounter || 0) : 0;
+    const next = current + 1;
+    tx.set(ref, { receiptCounter: next }, { merge: true });
+    return next;
+  });
+}
+</script>
+
+<script>
+const AREAS = [
+  { name: 'Kiwenda', units: 15 },
+  { name: 'Watuba', units: 29 },
+  { name: 'Wankulukuku Guest House', units: null },
+  { name: 'Bunamwaya', units: 17 }
+];
+const ADMIN_PASSWORD = '1234';
+
+let tenants = [];
+let ledger = [];
+let complaints = [];
+let activities = [];
+let receiptCounter = 0;
+
+const banner = document.getElementById('status-banner');
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function fmt(n) { return 'UGX ' + Number(n || 0).toLocaleString(); }
+function escapeHtml(str) {
+  if (str === undefined || str === null) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function monthLabel(ym) {
+  const [y,m] = ym.split('-');
+  const d = new Date(Number(y), Number(m)-1, 1);
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+// Data now lives in Firebase Firestore (see startRealtimeSync above), not this
+// device's local storage — every admin, on any device with internet, sees the
+// same live data. loadData() is kept only as the hook the app already calls
+// once the admin password is accepted.
+async function loadData() {
+  await authReady;
+  startRealtimeSync();
+}
+
+// ---- Number to words (for "Sum of ... Shillings") ----
+function numberToWords(num) {
+  num = Math.round(Number(num) || 0);
+  if (num === 0) return 'Zero Shillings Only';
+  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function threeDigits(n) {
+    let s = '';
+    if (n >= 100) { s += ones[Math.floor(n/100)] + ' Hundred '; n %= 100; }
+    if (n >= 20) { s += tens[Math.floor(n/10)] + ' '; n %= 10; }
+    if (n > 0) { s += ones[n] + ' '; }
+    return s;
+  }
+  const billions = Math.floor(num / 1e9);
+  const millions = Math.floor((num % 1e9) / 1e6);
+  const thousands = Math.floor((num % 1e6) / 1e3);
+  const rest = num % 1000;
+  let words = '';
+  if (billions) words += threeDigits(billions) + 'Billion ';
+  if (millions) words += threeDigits(millions) + 'Million ';
+  if (thousands) words += threeDigits(thousands) + 'Thousand ';
+  if (rest) words += threeDigits(rest);
+  return words.trim() + ' Shillings Only';
+}
+
+// ---- Rent period based on move-in anniversary day, not the payment date ----
+function anchorDateInMonth(year, month, day) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, lastDay));
+}
+function formatDateNice(d) {
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+// Add n months to a move-in anchor date, keeping the same day-of-month (clamped to shorter months)
+function anchorDatePlusMonths(moveInDate, n) {
+  const totalMonth = moveInDate.getMonth() + n;
+  const year = moveInDate.getFullYear() + Math.floor(totalMonth / 12);
+  const month = ((totalMonth % 12) + 12) % 12;
+  return anchorDateInMonth(year, month, moveInDate.getDate());
+}
+// A tenant's "month" runs from their move-in day-of-month up to (but not including)
+// that same day-of-month the following month — e.g. moved in 13th Jan: month 0 is
+// 13 Jan-12 Feb, month 1 is 13 Feb-12 Mar, etc.
+function monthStart(moveInDate, idx) { return anchorDatePlusMonths(moveInDate, idx); }
+function monthEnd(moveInDate, idx) {
+  const d = anchorDatePlusMonths(moveInDate, idx + 1);
+  d.setDate(d.getDate() - 1);
+  return d;
+}
+// The rent that was in effect for a given month, based on the tenant's rent-change
+// history — so a later rent increase/decrease never rewrites what earlier months owed.
+function rentForDate(tenant, dateObj) {
+  const history = Array.isArray(tenant.rentHistory) && tenant.rentHistory.length
+    ? tenant.rentHistory : [{ date: tenant.moveIn || '1970-01-01', rent: Number(tenant.rent || 0) }];
+  const sorted = history.slice().sort((a,b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+  let applicable = sorted[0].rent;
+  for (const h of sorted) {
+    if (new Date(h.date + 'T00:00:00') <= dateObj) applicable = h.rent; else break;
+  }
+  return Number(applicable || 0);
+}
+// Distribute every payment a tenant has made, in date order, always clearing the
+// oldest outstanding month's balance first before any newer month. Each month's
+// due amount uses the rent that was actually in effect for that month. Any
+// shortfall that doesn't fully clear a month is left as that month's own balance,
+// to be cleared by the tenant's next payment before anything newer.
+function computeTenantSchedule(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  const perPayment = {};
+  if (!t) return { finalMonthsPaid: 0, finalPartialPaid: 0, perPayment };
+  const moveIn = t.moveIn ? new Date(t.moveIn + 'T00:00:00') : null;
+  const payments = ledger.filter(l => l.tenantId === tenantId && l.type === 'Payment')
+    .slice()
+    .sort((a, b) => (a.date === b.date ? 0 : (a.date < b.date ? -1 : 1)) || String(a.id).localeCompare(String(b.id)));
+  let monthsFullyPaid = 0;
+  let partialPaid = 0;
+  if (!moveIn) return { finalMonthsPaid: 0, finalPartialPaid: 0, perPayment };
+  for (const p of payments) {
+    let remaining = Number(p.amount || 0);
+    const coveredMonths = [];
+    let safety = 0;
+    while (remaining > 0 && safety < 2000) {
+      safety++;
+      const idx = monthsFullyPaid;
+      const due = rentForDate(t, monthStart(moveIn, idx));
+      const needed = due - partialPaid;
+      if (due <= 0) { coveredMonths.push({ idx, amountApplied: 0, fullyPaid: true }); monthsFullyPaid += 1; partialPaid = 0; continue; }
+      if (remaining >= needed) {
+        coveredMonths.push({ idx, amountApplied: needed, fullyPaid: true });
+        remaining -= needed;
+        partialPaid = 0;
+        monthsFullyPaid += 1;
+      } else {
+        coveredMonths.push({ idx, amountApplied: remaining, fullyPaid: false, remainingAfter: needed - remaining });
+        partialPaid += remaining;
+        remaining = 0;
+      }
+    }
+    perPayment[p.id] = { coveredMonths, monthsFullyPaidAfter: monthsFullyPaid, partialPaidAfter: partialPaid };
+  }
+  return { finalMonthsPaid: monthsFullyPaid, finalPartialPaid: partialPaid, perPayment };
+}
+
+// ---- Draw the receipt onto a canvas, matching the provided template ----
+function drawReceiptCanvas(data) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 660;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 5;
+  ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
+  ctx.fillStyle = '#000000';
+  ctx.textBaseline = 'alphabetic';
+
+  // Title
+  ctx.font = 'bold 46px Arial';
+  ctx.fillText('HOUSE RENT RECEIPT', 45, 80);
+  // simple house icon
+  ctx.beginPath();
+  ctx.moveTo(830, 40); ctx.lineTo(870, 15); ctx.lineTo(910, 40);
+  ctx.closePath(); ctx.fill();
+  ctx.fillRect(840, 40, 60, 35);
+
+  ctx.font = '26px Arial';
+  ctx.fillText('Date:', 780, 130);
+  ctx.fillText(data.dateStr, 870, 130);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(860, 136); ctx.lineTo(1150, 136); ctx.stroke();
+
+  ctx.fillText('No.', 800, 170);
+  ctx.fillText(String(data.no), 870, 170);
+  ctx.beginPath(); ctx.moveTo(860, 176); ctx.lineTo(1150, 176); ctx.stroke();
+
+  ctx.fillText('Received from', 45, 190);
+  ctx.fillText(data.receivedFrom, 300, 190);
+  ctx.beginPath(); ctx.moveTo(290, 196); ctx.lineTo(700, 196); ctx.stroke();
+
+  ctx.fillText('The Sum of', 730, 190);
+  ctx.beginPath(); ctx.moveTo(850, 176); ctx.lineTo(1150, 176); ctx.stroke();
+
+  ctx.font = '22px Arial';
+  wrapText(ctx, data.sumWords, 45, 235, 700, 28);
+  ctx.beginPath(); ctx.moveTo(45, 246); ctx.lineTo(830, 246); ctx.stroke();
+  ctx.fillText('Shillings', 850, 236);
+
+  ctx.font = '26px Arial';
+  ctx.fillText('Paid by', 730, 290);
+  ['Cash','Mobile Money','Bank'].forEach((opt, i) => {
+    const y = 275 + i * 40;
+    ctx.strokeRect(850, y - 20, 24, 24);
+    if (data.paidBy === opt) {
+      ctx.font = 'bold 22px Arial';
+      ctx.fillText('✓', 854, y - 2);
+      ctx.font = '26px Arial';
+    }
+    ctx.fillText(opt, 885, y);
+  });
+
+  ctx.font = '26px Arial';
+  ctx.fillText('For the Period', 45, 345);
+  ctx.fillText(data.periodStartStr, 245, 345);
+  ctx.beginPath(); ctx.moveTo(240, 351); ctx.lineTo(420, 351); ctx.stroke();
+  ctx.fillText('to', 435, 345);
+  ctx.fillText(data.periodEndStr, 470, 345);
+  ctx.beginPath(); ctx.moveTo(465, 351); ctx.lineTo(640, 351); ctx.stroke();
+
+  ctx.fillText('Received by', 65, 390);
+  ctx.fillText(data.receivedBy, 265, 390);
+  ctx.beginPath(); ctx.moveTo(260, 396); ctx.lineTo(640, 396); ctx.stroke();
+
+  ctx.fillText('Address', 130, 435);
+  ctx.fillText(data.address, 265, 435);
+  ctx.beginPath(); ctx.moveTo(260, 441); ctx.lineTo(640, 441); ctx.stroke();
+
+  ctx.fillText('Amount', 105, 480);
+  ctx.font = 'bold 26px Arial';
+  ctx.fillText(fmt(data.amount), 265, 480);
+  ctx.font = '26px Arial';
+  ctx.beginPath(); ctx.moveTo(260, 486); ctx.lineTo(640, 486); ctx.stroke();
+
+  if (data.balanceLine) {
+    ctx.font = 'bold 24px Arial';
+    ctx.fillStyle = '#b1443b';
+    ctx.fillText(data.balanceLine, 65, 525);
+    ctx.fillStyle = '#000000';
+    ctx.font = '26px Arial';
+  }
+
+  ctx.beginPath(); ctx.moveTo(700, 550); ctx.lineTo(1150, 550); ctx.stroke();
+  ctx.font = '22px Arial';
+  ctx.fillText("Landlord's Signature", 830, 575);
+
+  ctx.font = '20px Arial';
+  ctx.fillText('Contacts:  0759706227-Kiwenda   |   0755007767-Watuba   |   0706069226-Bunamwaya and Wankulukuku', 55, 630);
+
+  return canvas.toDataURL('image/png');
+}
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '';
+  let curY = y;
+  for (let i = 0; i < words.length; i++) {
+    const test = line + words[i] + ' ';
+    if (ctx.measureText(test).width > maxWidth && line !== '') {
+      ctx.fillText(line, x, curY);
+      line = words[i] + ' ';
+      curY += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  ctx.fillText(line, x, curY);
+}
+
+// Automatic monthly rent charges based on move-in date anchor day
+// (works for any move-in year, including dates before 2026)
+function monthsDue(moveInStr, today) {
+  if (!moveInStr) return 0;
+  const moveIn = new Date(moveInStr + 'T00:00:00');
+  if (isNaN(moveIn.getTime()) || moveIn > today) return 0;
+  let months = (today.getFullYear() - moveIn.getFullYear()) * 12 + (today.getMonth() - moveIn.getMonth());
+  if (today.getDate() >= moveIn.getDate()) months += 1;
+  return Math.max(months, 0);
+}
+
+function tenantBalance(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t || !t.moveIn) return 0;
+  const today = new Date();
+  const moveIn = new Date(t.moveIn + 'T00:00:00');
+  const dueMonths = monthsDue(t.moveIn, today);
+  const sched = computeTenantSchedule(tenantId);
+  const extraCharges = ledger.filter(l => l.tenantId === tenantId && l.type === 'Charge').reduce((s,l) => s + Number(l.amount), 0);
+  let sumOwed = 0;
+  for (let idx = sched.finalMonthsPaid; idx < dueMonths; idx++) {
+    let due = rentForDate(t, monthStart(moveIn, idx));
+    if (idx === sched.finalMonthsPaid) due -= sched.finalPartialPaid;
+    sumOwed += Math.max(due, 0);
+  }
+  return sumOwed + extraCharges;
+}
+
+function normalizePhone(num) {
+  let n = (num || '').replace(/[^\d]/g, '');
+  if (n.startsWith('0')) n = '256' + n.slice(1);
+  return n;
+}
+
+function renderAll() {
+  renderOverview();
+  renderMonthly();
+  renderTenants();
+  renderLedger();
+  renderComplaints();
+  renderActivities();
+  populateSelects();
+}
+
+function activateView(viewName) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + viewName).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === viewName));
+}
+
+function currentMonthKey() { return new Date().toISOString().slice(0,7); }
+
+function areaCollected(areaName, monthKey) {
+  const areaTenantIds = tenants.filter(t => t.area === areaName).map(t => t.id);
+  return ledger.filter(l => l.type === 'Payment' && areaTenantIds.includes(l.tenantId) && (!monthKey || (l.date && l.date.slice(0,7) === monthKey)))
+    .reduce((s,l) => s + Number(l.amount), 0);
+}
+
+function renderOverview() {
+  const activeTenants = tenants.filter(t => t.status === 'Active').length;
+  const totalCollected = ledger.filter(l => l.type === 'Payment').reduce((s,l) => s + Number(l.amount), 0);
+  const mKey = currentMonthKey();
+  const thisMonthCollected = ledger.filter(l => l.type === 'Payment' && l.date && l.date.slice(0,7) === mKey)
+    .reduce((s,l) => s + Number(l.amount), 0);
+  const totalOwed = tenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+  const newComplaints = complaints.filter(c => c.status !== 'Resolved').length;
+
+  let bestArea = null, bestAmount = -1;
+  AREAS.forEach(a => {
+    const amt = areaCollected(a.name, mKey);
+    if (amt > bestAmount) { bestAmount = amt; bestArea = a.name; }
+  });
+
+  document.getElementById('overview-cards').innerHTML = `
+    <div class="card" onclick="activateView('tenants')"><div class="num">${activeTenants}</div><div class="label">Active Tenants</div></div>
+    <div class="card" onclick="activateView('payments')"><div class="num">${fmt(totalCollected)}</div><div class="label">Total Collected (All-Time)</div></div>
+    <div class="card" onclick="activateView('monthly')"><div class="num">${fmt(thisMonthCollected)}</div><div class="label">Collected This Month</div></div>
+    <div class="card owed" onclick="activateView('tenants')"><div class="num">${fmt(totalOwed)}</div><div class="label">Total Owed (Balances)</div></div>
+    <div class="card" onclick="activateView('complaints')"><div class="num">${newComplaints}</div><div class="label">Open Complaints</div></div>
+    <div class="card top"><div class="num">${bestAmount > 0 ? escapeHtml(bestArea) : '—'}</div><div class="label">Top Area This Month${bestAmount > 0 ? ' (' + fmt(bestAmount) + ')' : ''}</div></div>
+  `;
+
+  document.getElementById('area-cards').innerHTML = AREAS.map(a => {
+    const areaTenants = tenants.filter(t => t.area === a.name);
+    const collectedAll = areaCollected(a.name, null);
+    const collectedMonth = areaCollected(a.name, mKey);
+    const owed = areaTenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+    return `
+      <div class="area-card ${a.name === bestArea && bestAmount > 0 ? 'best' : ''}">
+        <h4>${a.name} ${a.units ? `<span class="units-tag">(${a.units} units)</span>` : ''}</h4>
+        <div class="stat-row"><span>Tenants</span><span>${areaTenants.length}</span></div>
+        <div class="stat-row"><span>Collected (all-time)</span><span>${fmt(collectedAll)}</span></div>
+        <div class="stat-row"><span>Collected (this month)</span><span>${fmt(collectedMonth)}</span></div>
+        <div class="stat-row"><span>Owed</span><span>${fmt(owed)}</span></div>
+      </div>`;
+  }).join('');
+
+  const recentPayments = [...ledger].filter(l => l.type === 'Payment').sort((a,b) => b.date.localeCompare(a.date)).slice(0,8);
+  document.getElementById('recent-payments-body').innerHTML = recentPayments.length ? recentPayments.map(l => {
+    const t = tenants.find(x => x.id === l.tenantId);
+    return `<tr><td>${l.date}</td><td>${t ? escapeHtml(t.area) : '—'}</td><td>${t ? escapeHtml(t.name) : '—'}</td><td>${fmt(l.amount)}</td><td>${escapeHtml(l.note || '')}</td></tr>`;
+  }).join('') : `<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>`;
+}
+
+function renderMonthly() {
+  const byMonth = {};
+  ledger.filter(l => l.type === 'Payment').forEach(l => {
+    const k = (l.date || '').slice(0,7);
+    if (!k) return;
+    byMonth[k] = (byMonth[k] || 0) + Number(l.amount);
+  });
+  const keys = Object.keys(byMonth).sort().reverse();
+  const body = document.getElementById('monthly-body');
+  body.innerHTML = keys.length ? keys.map(k => `<tr><td>${monthLabel(k)}</td><td>${fmt(byMonth[k])}</td></tr>`).join('')
+    : `<tr><td colspan="2" class="empty">No payments recorded yet.</td></tr>`;
+}
+
+function renderTenants() {
+  const areaFilter = document.getElementById('tenant-filter-area').value;
+  let list = [...tenants];
+  if (areaFilter) list = list.filter(t => t.area === areaFilter);
+  const body = document.getElementById('tenants-body');
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="8" class="empty">No tenants yet. Tap "+ Add Tenant" to start.</td></tr>`;
+    return;
+  }
+  body.innerHTML = list.map(t => {
+    const bal = tenantBalance(t.id);
+    return `
+    <tr>
+      <td>${escapeHtml(t.area)}</td>
+      <td>${escapeHtml(t.unit)}</td>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.whatsapp || '—')}</td>
+      <td>${t.rent ? fmt(t.rent) : '—'}</td>
+      <td><span class="badge ${bal > 0 ? 'owed' : 'clear'}">${fmt(bal)}</span></td>
+      <td><span class="badge ${t.status === 'Active' ? 'active' : 'vacated'}">${t.status}</span></td>
+      <td class="row-actions">
+        <button class="btn small" onclick="openPaymentModal('${t.id}')">Payment</button>
+        <button class="btn small secondary" onclick="addExtraCharge('${t.id}')">Add Charge</button>
+        <button class="icon-btn" onclick="editTenant('${t.id}')">✏️</button>
+        <button class="icon-btn" onclick="deleteTenant('${t.id}')">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderLedger() {
+  const body = document.getElementById('ledger-body');
+  const rows = [...ledger].sort((a,b) => b.date.localeCompare(a.date));
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9" class="empty">No ledger entries yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(l => {
+    const t = tenants.find(x => x.id === l.tenantId);
+    const receiptBtn = (l.type === 'Payment' && t && t.whatsapp)
+      ? `<button class="btn small whatsapp" onclick="sendReceipt('${l.id}')">Send Receipt</button>`
+      : (l.type === 'Payment' ? `<span style="font-size:0.7rem;color:var(--muted);">no WhatsApp #</span>` : '');
+    const editBtn = l.type === 'Payment' ? `<button class="icon-btn" onclick="editLedgerPayment('${l.id}')">✏️</button>` : '';
+    return `<tr>
+      <td>${l.date}</td>
+      <td>${t ? escapeHtml(t.area) : '—'}</td>
+      <td>${t ? escapeHtml(t.name) : '—'}</td>
+      <td>${l.type}</td>
+      <td>${fmt(l.amount)}</td>
+      <td>${escapeHtml(l.receivedBy || '')}</td>
+      <td>${escapeHtml(l.paidBy || '')}</td>
+      <td>${escapeHtml(l.note || '')}</td>
+      <td class="row-actions">${editBtn}${receiptBtn}<button class="icon-btn" onclick="deleteLedgerEntry('${l.id}')">🗑️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderComplaints() {
+  const body = document.getElementById('complaints-body');
+  const rows = [...complaints].sort((a,b) => b.date.localeCompare(a.date));
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="6" class="empty">No complaints submitted yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(c => `
+    <tr>
+      <td>${c.date}</td>
+      <td>${escapeHtml(c.area)} / ${escapeHtml(c.unit)}</td>
+      <td>${escapeHtml(c.name)}${c.phone ? ' ('+escapeHtml(c.phone)+')' : ''}</td>
+      <td>${escapeHtml(c.message)}${c.voiceNote ? `<br><audio controls style="width:200px; margin-top:4px;" src="${c.voiceNote}"></audio>` : ''}</td>
+      <td><span class="badge ${c.status === 'Resolved' ? 'resolved' : 'new'}">${c.status || 'New'}</span></td>
+      <td class="row-actions">
+        ${c.status !== 'Resolved' ? `<button class="btn small" onclick="resolveComplaint('${c.id}')">Mark Resolved</button>` : ''}
+        <button class="icon-btn" onclick="deleteComplaint('${c.id}')">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+
+function renderActivities() {
+  const body = document.getElementById('activities-body');
+  const rows = [...activities].sort((a,b) => b.date.localeCompare(a.date));
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="7" class="empty">No activities logged yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(a => `
+    <tr>
+      <td>${a.date}</td>
+      <td>${escapeHtml(a.area || '')}${a.unit ? ' / ' + escapeHtml(a.unit) : ''}</td>
+      <td>${a.type}</td>
+      <td>${escapeHtml(a.details)}</td>
+      <td>${escapeHtml(a.enteredBy || '')}</td>
+      <td><span class="badge ${a.status === 'Done' ? 'done' : 'pending'}">${a.status}</span></td>
+      <td class="row-actions">
+        <button class="icon-btn" onclick="editActivity('${a.id}')">✏️</button>
+        <button class="icon-btn" onclick="deleteActivity('${a.id}')">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+
+function populateSelects() {
+  populatePaymentTenantSelect();
+  const actUnitSel = document.getElementById('activity-unit');
+  const areaVal = document.getElementById('activity-area').value;
+  const filtered = areaVal ? tenants.filter(t => t.area === areaVal) : tenants;
+  actUnitSel.innerHTML = '<option value="">— No specific unit —</option>' +
+    filtered.map(t => `<option value="${escapeHtml(t.unit)}">${escapeHtml(t.unit)} (${escapeHtml(t.name)})</option>`).join('');
+}
+
+function populatePaymentTenantSelect() {
+  const areaVal = document.getElementById('payment-area').value;
+  const sel = document.getElementById('payment-tenant');
+  if (!areaVal) {
+    sel.innerHTML = '<option value="">None</option>';
+    updatePaymentSaveState();
+    return;
+  }
+  const filtered = tenants.filter(t => t.area === areaVal);
+  sel.innerHTML = '<option value="">None</option>' +
+    (filtered.length ? filtered.map(t => `<option value="${t.id}">${escapeHtml(t.unit)} (${escapeHtml(t.name)})</option>`).join('')
+    : '');
+  updatePaymentSaveState();
+}
+
+function updatePaymentSaveState() {
+  const areaVal = document.getElementById('payment-area').value;
+  const tenantVal = document.getElementById('payment-tenant').value;
+  const btn = document.getElementById('payment-save');
+  const ready = !!areaVal && !!tenantVal;
+  btn.disabled = !ready;
+  btn.style.opacity = ready ? '1' : '0.5';
+  btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => activateView(btn.dataset.view));
+});
+document.getElementById('payment-area').addEventListener('change', populatePaymentTenantSelect);
+document.getElementById('payment-tenant').addEventListener('change', updatePaymentSaveState);
+
+// ---- Role gate with admin password ----
+document.getElementById('gate-admin').addEventListener('click', () => {
+  document.getElementById('gate-buttons').style.display = 'none';
+  document.getElementById('gate-password-form').style.display = 'block';
+  document.getElementById('gate-password-input').value = '';
+  document.getElementById('gate-error').style.display = 'none';
+});
+document.getElementById('gate-password-cancel').addEventListener('click', () => {
+  document.getElementById('gate-password-form').style.display = 'none';
+  document.getElementById('gate-buttons').style.display = 'block';
+});
+document.getElementById('gate-password-submit').addEventListener('click', () => {
+  const val = document.getElementById('gate-password-input').value;
+  if (val === ADMIN_PASSWORD) {
+    document.getElementById('role-gate').style.display = 'none';
+    document.getElementById('app-shell').style.display = 'block';
+    loadData();
+  } else {
+    document.getElementById('gate-error').style.display = 'block';
+  }
+});
+document.getElementById('gate-password-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('gate-password-submit').click();
+});
+function goBackToGate() {
+  document.getElementById('tenant-app').style.display = 'none';
+  document.getElementById('tenant-form-wrap').style.display = 'block';
+  document.getElementById('tenant-confirm').style.display = 'none';
+  document.getElementById('gate-buttons').style.display = 'block';
+  document.getElementById('gate-password-form').style.display = 'none';
+  document.getElementById('role-gate').style.display = 'flex';
+}
+document.getElementById('gate-tenant').addEventListener('click', () => {
+  document.getElementById('role-gate').style.display = 'none';
+  document.getElementById('tenant-app').style.display = 'block';
+});
+document.getElementById('tenant-back').addEventListener('click', goBackToGate);
+document.getElementById('tenant-back-top').addEventListener('click', goBackToGate);
+document.getElementById('admin-back').addEventListener('click', () => {
+  document.getElementById('app-shell').style.display = 'none';
+  document.getElementById('gate-buttons').style.display = 'block';
+  document.getElementById('gate-password-form').style.display = 'none';
+  document.getElementById('role-gate').style.display = 'flex';
+});
+
+document.getElementById('backup-btn').addEventListener('click', async () => {
+  let liveCounter = receiptCounter;
+  try {
+    const counterDoc = await db.collection('meta').doc('counters').get();
+    if (counterDoc.exists) liveCounter = Number(counterDoc.data().receiptCounter || 0);
+  } catch (e) { /* fall back to local value if offline */ }
+  const backup = { tenants, ledger, complaints, activities, receiptCounter: liveCounter, exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `namuyimba_backup_${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('restore-btn').addEventListener('click', () => {
+  document.getElementById('restore-file-input').click();
+});
+document.getElementById('restore-file-input').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!confirm('This will replace all shared data in the database with the backup file, for every admin. Continue?')) return;
+      const newTenants = data.tenants || [];
+      const newLedger = data.ledger || [];
+      const newComplaints = data.complaints || [];
+      const newActivities = data.activities || [];
+      const newCounter = Number(data.receiptCounter) || 0;
+
+      // Clear existing docs, then write the backup's docs — batched (max 500 ops per batch).
+      const collections = [
+        ['tenants', tenants], ['ledger', ledger], ['complaints', complaints], ['activities', activities]
+      ];
+      for (const [name, existingArr] of collections) {
+        let batch = db.batch();
+        let ops = 0;
+        for (const item of existingArr) {
+          batch.delete(db.collection(name).doc(item.id));
+          ops++;
+          if (ops >= 450) { await batch.commit(); batch = db.batch(); ops = 0; }
+        }
+        if (ops > 0) await batch.commit();
+      }
+      const toWrite = [
+        ['tenants', newTenants], ['ledger', newLedger], ['complaints', newComplaints], ['activities', newActivities]
+      ];
+      for (const [name, arr] of toWrite) {
+        let batch = db.batch();
+        let ops = 0;
+        for (const item of arr) {
+          batch.set(db.collection(name).doc(item.id), item);
+          ops++;
+          if (ops >= 450) { await batch.commit(); batch = db.batch(); ops = 0; }
+        }
+        if (ops > 0) await batch.commit();
+      }
+      await db.collection('meta').doc('counters').set({ receiptCounter: newCounter }, { merge: true });
+      alert('Backup restored successfully — all connected admins will see the restored data.');
+    } catch (err) {
+      alert('Could not restore that backup file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ---- Tenant voice note recording ----
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingTimerInterval = null;
+let recordingSeconds = 0;
+let voiceNoteDataUrl = null;
+const MAX_RECORD_SECONDS = 60;
+
+function resetVoiceRecording() {
+  voiceNoteDataUrl = null;
+  document.getElementById('c-voice-preview').style.display = 'none';
+  document.getElementById('c-voice-audio').src = '';
+  document.getElementById('c-record-btn').textContent = '🎤 Record voice note';
+  document.getElementById('c-record-timer').textContent = '';
+  document.getElementById('c-voice-error').style.display = 'none';
+}
+
+document.getElementById('c-record-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('c-record-btn');
+  const errBox = document.getElementById('c-voice-error');
+  errBox.style.display = 'none';
+
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    errBox.textContent = 'Voice recording is not available in this browser context. It generally requires the page to be served over https:// (or localhost) — it may not work when the file is opened directly from disk.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(tr => tr.stop());
+      clearInterval(recordingTimerInterval);
+      document.getElementById('c-record-timer').textContent = '';
+      btn.textContent = '🎤 Record voice note';
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = () => {
+        voiceNoteDataUrl = reader.result;
+        document.getElementById('c-voice-audio').src = voiceNoteDataUrl;
+        document.getElementById('c-voice-preview').style.display = 'block';
+      };
+      reader.readAsDataURL(blob);
+    };
+    mediaRecorder.start();
+    btn.textContent = '⏹ Stop recording';
+    recordingSeconds = 0;
+    document.getElementById('c-record-timer').textContent = '0:00';
+    recordingTimerInterval = setInterval(() => {
+      recordingSeconds++;
+      const m = Math.floor(recordingSeconds / 60), s = recordingSeconds % 60;
+      document.getElementById('c-record-timer').textContent = `${m}:${String(s).padStart(2,'0')}`;
+      if (recordingSeconds >= MAX_RECORD_SECONDS) mediaRecorder.stop();
+    }, 1000);
+  } catch (e) {
+    errBox.textContent = 'Could not access the microphone — please check browser/device permissions.';
+    errBox.style.display = 'block';
+  }
+});
+document.getElementById('c-voice-delete').addEventListener('click', resetVoiceRecording);
+
+document.getElementById('c-submit').addEventListener('click', async () => {
+  const unit = document.getElementById('c-unit').value.trim();
+  const name = document.getElementById('c-name').value.trim();
+  const message = document.getElementById('c-message').value.trim();
+  if (!unit || !name || !message) { alert('Please fill in your unit, name, and message.'); return; }
+  const entry = {
+    id: uid(), area: document.getElementById('c-area').value, unit, name,
+    phone: document.getElementById('c-phone').value.trim(), message, date: todayStr(), status: 'New',
+    voiceNote: voiceNoteDataUrl || null
+  };
+  const submitBtn = document.getElementById('c-submit');
+  submitBtn.disabled = true; submitBtn.textContent = 'Sending...';
+  try {
+    await authReady;
+    await db.collection('complaints').doc(entry.id).set(entry);
+  } catch (e) {
+    alert('Could not send — please check your internet connection and try again. (' + e.message + ')');
+    submitBtn.disabled = false; submitBtn.textContent = 'Submit';
+    return;
+  }
+  submitBtn.disabled = false; submitBtn.textContent = 'Submit';
+  document.getElementById('tenant-form-wrap').style.display = 'none';
+  document.getElementById('tenant-confirm').style.display = 'block';
+});
+document.getElementById('c-another').addEventListener('click', () => {
+  document.getElementById('c-unit').value = '';
+  document.getElementById('c-name').value = '';
+  document.getElementById('c-phone').value = '';
+  document.getElementById('c-message').value = '';
+  resetVoiceRecording();
+  document.getElementById('tenant-confirm').style.display = 'none';
+  document.getElementById('tenant-form-wrap').style.display = 'block';
+});
+
+const tenantModalBg = document.getElementById('tenant-modal-bg');
+document.getElementById('add-tenant-btn').addEventListener('click', () => {
+  document.getElementById('tenant-modal-title').textContent = 'Add Tenant';
+  document.getElementById('tenant-id').value = '';
+  document.getElementById('tenant-area').value = 'Kiwenda';
+  document.getElementById('tenant-unit').value = '';
+  document.getElementById('tenant-name').value = '';
+  document.getElementById('tenant-whatsapp').value = '';
+  document.getElementById('tenant-other-phone').value = '';
+  document.getElementById('tenant-movein').value = todayStr();
+  document.getElementById('tenant-rent').value = '';
+  document.getElementById('tenant-opening-balance').value = '';
+  document.getElementById('tenant-status').value = 'Active';
+  tenantModalBg.classList.add('active');
+});
+document.getElementById('tenant-cancel').addEventListener('click', () => tenantModalBg.classList.remove('active'));
+
+window.editTenant = function(id) {
+  const t = tenants.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('tenant-modal-title').textContent = 'Edit Tenant';
+  document.getElementById('tenant-id').value = t.id;
+  document.getElementById('tenant-area').value = t.area;
+  document.getElementById('tenant-unit').value = t.unit;
+  document.getElementById('tenant-name').value = t.name;
+  document.getElementById('tenant-whatsapp').value = t.whatsapp || '';
+  document.getElementById('tenant-other-phone').value = t.otherPhone || '';
+  document.getElementById('tenant-movein').value = t.moveIn || '';
+  document.getElementById('tenant-rent').value = t.rent || '';
+  document.getElementById('tenant-opening-balance').value = '';
+  document.getElementById('tenant-status').value = t.status;
+  tenantModalBg.classList.add('active');
+};
+
+window.deleteTenant = async function(id) {
+  if (!confirm('Delete this tenant? Their ledger history will remain but be unlinked.')) return;
+  tenants = tenants.filter(x => x.id !== id);
+  renderAll();
+  await fsDeleteTenant(id);
+};
+
+document.getElementById('tenant-save').addEventListener('click', async () => {
+  const id = document.getElementById('tenant-id').value;
+  const unit = document.getElementById('tenant-unit').value.trim();
+  const name = document.getElementById('tenant-name').value.trim();
+  if (!unit || !name) { alert('Please enter at least the unit and tenant name.'); return; }
+  const newRent = Number(document.getElementById('tenant-rent').value || 0);
+  const moveIn = document.getElementById('tenant-movein').value;
+  const data = {
+    area: document.getElementById('tenant-area').value, unit, name,
+    whatsapp: document.getElementById('tenant-whatsapp').value.trim(),
+    otherPhone: document.getElementById('tenant-other-phone').value.trim(),
+    moveIn,
+    rent: newRent,
+    status: document.getElementById('tenant-status').value
+  };
+  let tenantId = id;
+  let finalTenant;
+  if (id) {
+    const idx = tenants.findIndex(x => x.id === id);
+    const existing = tenants[idx];
+    const history = Array.isArray(existing.rentHistory) ? existing.rentHistory.slice() : [{ date: existing.moveIn || moveIn, rent: Number(existing.rent || 0) }];
+    // Rent changes apply from today forward only — past months keep the rent that was in effect at the time.
+    if (Number(existing.rent || 0) !== newRent) {
+      history.push({ date: todayStr(), rent: newRent });
+    }
+    finalTenant = { ...existing, ...data, rentHistory: history };
+    tenants[idx] = finalTenant;
+  } else {
+    tenantId = uid();
+    finalTenant = { id: tenantId, ...data, rentHistory: [{ date: moveIn || todayStr(), rent: newRent }] };
+    tenants.push(finalTenant);
+    const opening = Number(document.getElementById('tenant-opening-balance').value || 0);
+    if (opening > 0) {
+      const chargeEntry = { id: uid(), tenantId, date: todayStr(), type: 'Charge', amount: opening, note: 'Opening balance' };
+      ledger.push(chargeEntry);
+      await fsSetLedger(chargeEntry);
+    }
+  }
+  await fsSetTenant(finalTenant);
+  tenantModalBg.classList.remove('active');
+  renderAll();
+});
+
+
+const paymentModalBg = document.getElementById('payment-modal-bg');
+window.openPaymentModal = function(tenantId) {
+  const t = tenantId ? tenants.find(x => x.id === tenantId) : null;
+  document.getElementById('payment-modal-title').textContent = 'Record Payment';
+  document.getElementById('payment-edit-id').value = '';
+  document.getElementById('payment-area').value = t ? t.area : '';
+  populatePaymentTenantSelect();
+  if (t) document.getElementById('payment-tenant').value = tenantId;
+  document.getElementById('payment-date').value = todayStr();
+  document.getElementById('payment-amount').value = '';
+  document.getElementById('payment-receivedby').value = 'SSERUMPANISE MICHEAL';
+  document.getElementById('payment-paidby').value = 'Cash';
+  document.getElementById('payment-note').value = '';
+  updatePaymentSaveState();
+  paymentModalBg.classList.add('active');
+};
+
+window.editLedgerPayment = function(ledgerId) {
+  const l = ledger.find(x => x.id === ledgerId);
+  if (!l) return;
+  const t = tenants.find(x => x.id === l.tenantId);
+  document.getElementById('payment-modal-title').textContent = l.receiptNo ? `Edit Payment (Receipt No. ${l.receiptNo} already issued)` : 'Edit Payment';
+  document.getElementById('payment-edit-id').value = l.id;
+  document.getElementById('payment-area').value = t ? t.area : '';
+  populatePaymentTenantSelect();
+  document.getElementById('payment-tenant').value = l.tenantId;
+  document.getElementById('payment-date').value = l.date;
+  document.getElementById('payment-amount').value = l.amount;
+  document.getElementById('payment-receivedby').value = l.receivedBy || 'SSERUMPANISE MICHEAL';
+  document.getElementById('payment-paidby').value = l.paidBy || 'Cash';
+  document.getElementById('payment-note').value = l.note || '';
+  updatePaymentSaveState();
+  paymentModalBg.classList.add('active');
+};
+
+document.getElementById('add-payment-btn').addEventListener('click', () => openPaymentModal(null));
+document.getElementById('payment-cancel').addEventListener('click', () => paymentModalBg.classList.remove('active'));
+document.getElementById('payment-save').addEventListener('click', async () => {
+  const editId = document.getElementById('payment-edit-id').value;
+  const tenantId = document.getElementById('payment-tenant').value;
+  const areaId = document.getElementById('payment-area').value;
+  const amount = Number(document.getElementById('payment-amount').value);
+  if (!areaId || !tenantId) { alert('Please select an area and a tenant.'); return; }
+  if (!amount) { alert('Please enter an amount.'); return; }
+  const data = {
+    tenantId, date: document.getElementById('payment-date').value || todayStr(),
+    type: 'Payment', amount,
+    receivedBy: document.getElementById('payment-receivedby').value,
+    paidBy: document.getElementById('payment-paidby').value,
+    note: document.getElementById('payment-note').value.trim()
+  };
+  let finalEntry;
+  if (editId) {
+    const idx = ledger.findIndex(x => x.id === editId);
+    finalEntry = idx > -1 ? { ...ledger[idx], ...data } : { id: editId, ...data };
+    if (idx > -1) ledger[idx] = finalEntry;
+  } else {
+    finalEntry = { id: uid(), ...data };
+    ledger.push(finalEntry);
+  }
+  renderAll();
+  await fsSetLedger(finalEntry);
+  paymentModalBg.classList.remove('active');
+});
+
+window.addExtraCharge = async function(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t) return;
+  const amountStr = prompt(`Enter extra charge amount for ${t.name} (UGX):`);
+  if (!amountStr) return;
+  const amount = Number(amountStr);
+  if (!amount) { alert('Please enter a valid number.'); return; }
+  const note = prompt('Note for this charge (e.g. penalty, damage):') || '';
+  const entry = { id: uid(), tenantId, date: todayStr(), type: 'Charge', amount, note };
+  ledger.push(entry);
+  renderAll();
+  await fsSetLedger(entry);
+};
+
+window.deleteLedgerEntry = async function(id) {
+  if (!confirm('Delete this ledger entry?')) return;
+  ledger = ledger.filter(x => x.id !== id);
+  renderAll();
+  await fsDeleteLedger(id);
+};
+
+window.sendReceipt = async function(ledgerId) {
+  const l = ledger.find(x => x.id === ledgerId);
+  if (!l) return;
+  const t = tenants.find(x => x.id === l.tenantId);
+  if (!t || !t.whatsapp) { alert('This tenant has no WhatsApp number on file.'); return; }
+
+  if (!t.moveIn) { alert('This tenant has no move-in date set — please add one before sending a receipt.'); return; }
+
+  if (!l.receiptNo) {
+    l.receiptNo = await fsNextReceiptNumber();
+    await fsSetLedger(l);
+  }
+
+  const sched = computeTenantSchedule(t.id);
+  const moveInDate = new Date(t.moveIn + 'T00:00:00');
+  const info = sched.perPayment[l.id];
+  let periodStart, periodEnd, balanceLine = null;
+  if (info && info.coveredMonths.length) {
+    const first = info.coveredMonths[0];
+    const last = info.coveredMonths[info.coveredMonths.length - 1];
+    periodStart = monthStart(moveInDate, first.idx);
+    periodEnd = monthEnd(moveInDate, last.idx);
+    if (!last.fullyPaid) {
+      balanceLine = `Balance: ${fmt(last.remainingAfter)} still due for the month of ${formatDateNice(monthStart(moveInDate, last.idx))} - ${formatDateNice(monthEnd(moveInDate, last.idx))}`;
+    }
+  } else {
+    periodStart = periodEnd = monthStart(moveInDate, 0);
+  }
+
+  const dataUrl = drawReceiptCanvas({
+    dateStr: formatDateNice(new Date(l.date + 'T00:00:00')),
+    no: l.receiptNo,
+    receivedFrom: t.name,
+    sumWords: numberToWords(l.amount),
+    paidBy: l.paidBy || '',
+    periodStartStr: formatDateNice(periodStart),
+    periodEndStr: formatDateNice(periodEnd),
+    receivedBy: l.receivedBy || '',
+    address: t.area,
+    amount: l.amount,
+    balanceLine
+  });
+
+  // Download the receipt image
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = `Receipt_${l.receiptNo}_${t.name.replace(/\s+/g,'_')}.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // Open WhatsApp with a text message — WhatsApp links cannot auto-attach images,
+  // so the downloaded receipt must be attached manually in the chat that opens.
+  const message = `Hello ${t.name}, here is your rent receipt No. ${l.receiptNo} for ${fmt(l.amount)} received on ${formatDateNice(new Date(l.date + 'T00:00:00'))}. Please see the attached receipt image. Thank you - NAMUYIMBA and SONS.`;
+  const phone = normalizePhone(t.whatsapp);
+  alert('The receipt image has been downloaded. WhatsApp will now open with a message — please attach the downloaded receipt image to the chat before sending, since WhatsApp links can\'t attach images automatically.');
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  renderAll();
+};
+
+window.resolveComplaint = async function(id) {
+  const c = complaints.find(x => x.id === id);
+  if (!c) return;
+  const updated = { ...c, status: 'Resolved' };
+  const idx = complaints.findIndex(x => x.id === id);
+  complaints[idx] = updated;
+  renderAll();
+  await fsSetComplaint(updated);
+};
+window.deleteComplaint = async function(id) {
+  if (!confirm('Delete this complaint?')) return;
+  complaints = complaints.filter(x => x.id !== id);
+  renderAll();
+  await fsDeleteComplaint(id);
+};
+
+const activityModalBg = document.getElementById('activity-modal-bg');
+document.getElementById('add-activity-btn').addEventListener('click', () => {
+  document.getElementById('activity-modal-title').textContent = 'Log Activity';
+  document.getElementById('activity-id').value = '';
+  document.getElementById('activity-date').value = todayStr();
+  document.getElementById('activity-area').value = '';
+  populateSelects();
+  document.getElementById('activity-unit').value = '';
+  document.getElementById('activity-type').value = 'Maintenance';
+  document.getElementById('activity-details').value = '';
+  document.getElementById('activity-enteredby').value = 'SSERUMPANISE MICHEAL';
+  document.getElementById('activity-status').value = 'Pending';
+  activityModalBg.classList.add('active');
+});
+document.getElementById('activity-area').addEventListener('change', populateSelects);
+document.getElementById('activity-cancel').addEventListener('click', () => activityModalBg.classList.remove('active'));
+
+window.editActivity = function(id) {
+  const a = activities.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('activity-modal-title').textContent = 'Edit Activity';
+  document.getElementById('activity-id').value = a.id;
+  document.getElementById('activity-date').value = a.date;
+  document.getElementById('activity-area').value = a.area || '';
+  populateSelects();
+  document.getElementById('activity-unit').value = a.unit || '';
+  document.getElementById('activity-type').value = a.type;
+  document.getElementById('activity-details').value = a.details;
+  document.getElementById('activity-enteredby').value = a.enteredBy || 'SSERUMPANISE MICHEAL';
+  document.getElementById('activity-status').value = a.status;
+  activityModalBg.classList.add('active');
+};
+
+window.deleteActivity = async function(id) {
+  activities = activities.filter(x => x.id !== id);
+  renderAll();
+  await fsDeleteActivity(id);
+};
+
+document.getElementById('activity-save').addEventListener('click', async () => {
+  const id = document.getElementById('activity-id').value;
+  const details = document.getElementById('activity-details').value.trim();
+  if (!details) { alert('Please enter some details for this activity.'); return; }
+  const data = {
+    date: document.getElementById('activity-date').value || todayStr(),
+    area: document.getElementById('activity-area').value,
+    unit: document.getElementById('activity-unit').value,
+    type: document.getElementById('activity-type').value,
+    details,
+    enteredBy: document.getElementById('activity-enteredby').value,
+    status: document.getElementById('activity-status').value
+  };
+  let finalActivity;
+  if (id) {
+    const idx = activities.findIndex(x => x.id === id);
+    finalActivity = idx > -1 ? { ...activities[idx], ...data } : { id, ...data };
+    if (idx > -1) activities[idx] = finalActivity;
+  } else {
+    finalActivity = { id: uid(), ...data };
+    activities.push(finalActivity);
+  }
+  renderAll();
+  await fsSetActivity(finalActivity);
+  activityModalBg.classList.remove('active');
+});
+
+document.getElementById('tenant-filter-area').addEventListener('change', renderTenants);
+</script>
+
+</body>
+</html>
