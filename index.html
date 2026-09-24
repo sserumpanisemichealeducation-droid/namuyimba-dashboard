@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NAMUYIMBA and SONS Property Dashboard</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#234f3a">
 <style>
   :root {
     --bg: #f4f6f5; --card: #ffffff; --primary: #2f6b4f; --primary-dark: #234f3a;
@@ -33,6 +35,8 @@
   .card.top .num { font-size: 1.05rem; color: var(--accent); }
 
   .area-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 20px; }
+  .chart-box canvas { width: 100%; height: 220px; display: block; }
   .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
   .area-card h4 { margin: 0 0 8px; color: var(--primary-dark); font-size: 1rem; }
   .area-card .stat-row { display: flex; justify-content: space-between; font-size: 0.82rem; padding: 3px 0; }
@@ -107,7 +111,8 @@
     <div id="gate-buttons">
       <button class="btn" id="gate-admin">I'm Property Staff / Admin</button>
       <button class="btn secondary" id="gate-tenant">I'm a Tenant</button>
-      <p style="font-size:0.72rem; margin-top:14px;">Tenants can only submit a complaint or request here — staff data isn't shown.</p>
+      <p style="font-size:0.72rem; margin-top:14px;">Tenants can view payment details, report a payment, or submit a complaint here — staff data isn't shown.</p>
+      <button class="btn" id="install-app-btn" style="display:none; background:var(--accent);">📲 Install this app on your phone</button>
     </div>
     <div id="gate-password-form" style="display:none;">
       <label style="text-align:left;">Enter admin password</label>
@@ -125,11 +130,56 @@
   </div>
   <header style="border-radius:14px; margin-bottom:16px;">
     <h1>NAMUYIMBA and SONS</h1>
-    <p>Submit a complaint or request to property management</p>
+    <p>Payments &amp; complaints for property management</p>
   </header>
+
+  <div class="section-title" style="margin-top:0;">💳 How to Pay</div>
+  <div id="tenant-pay-info">Loading payment details...</div>
+
+  <div class="section-title">✅ I've Made a Payment</div>
+  <div id="tenant-payclaim-wrap">
+    <label>Area</label>
+    <select id="pc-area">
+      <option value="">None</option>
+      <option value="Kiwenda">Kiwenda</option>
+      <option value="Watuba">Watuba</option>
+      <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+      <option value="Bunamwaya">Bunamwaya</option>
+    </select>
+    <label>Unit / Room number</label>
+    <input id="pc-unit" placeholder="e.g. Unit 4">
+    <label>Your name</label>
+    <input id="pc-name" placeholder="e.g. John Mukasa">
+    <label>Amount Paid (UGX)</label>
+    <input id="pc-amount" type="number" placeholder="e.g. 500000">
+    <label>Payment Method</label>
+    <select id="pc-method">
+      <option>Mobile Money</option>
+      <option>Bank</option>
+      <option>Cash</option>
+      <option>Other</option>
+    </select>
+    <label>Transaction reference / receipt no. (optional — helps us confirm faster)</label>
+    <input id="pc-reference" placeholder="e.g. Mobile Money transaction ID">
+    <label>Date Paid</label>
+    <input id="pc-date" type="date">
+    <label>Note (optional)</label>
+    <input id="pc-note" placeholder="e.g. October rent">
+    <button class="btn" id="pc-submit" style="width:100%; margin-top:16px;">Submit Payment Report</button>
+  </div>
+  <div class="confirm" id="pc-confirm">
+    <div class="checkmark">✅</div>
+    <h3>Thank you — we've received your payment report. Our staff will confirm it and issue your receipt.</h3>
+    <button class="btn" id="pc-another">Report another payment</button>
+  </div>
+
+  <hr style="margin:24px 0; border:none; border-top:1px solid var(--border);">
+
+  <div class="section-title">📢 Submit a Complaint / Request</div>
   <div id="tenant-form-wrap">
     <label>Area</label>
     <select id="c-area">
+      <option value="">None</option>
       <option value="Kiwenda">Kiwenda</option>
       <option value="Watuba">Watuba</option>
       <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
@@ -177,12 +227,17 @@
   <button class="tab-btn" data-view="payments">Payments</button>
   <button class="tab-btn" data-view="complaints">Complaints</button>
   <button class="tab-btn" data-view="activities">Activity Log</button>
+  <button class="tab-btn" data-view="settings">Payment Settings</button>
 </nav>
 
 <main>
 
   <div id="view-overview" class="view active">
     <div class="cards" id="overview-cards"></div>
+    <div class="section-title">Collections Trend (last 6 months)</div>
+    <div class="chart-box"><canvas id="chart-monthly-trend"></canvas></div>
+    <div class="section-title">Collected by Area (This Month)</div>
+    <div class="chart-box"><canvas id="chart-area-compare"></canvas></div>
     <div class="section-title">By Area</div>
     <div class="area-cards" id="area-cards"></div>
     <div class="section-title">Recent Payments</div>
@@ -197,6 +252,7 @@
   <div id="view-monthly" class="view">
     <button class="back-link-inline" onclick="activateView('overview')">← Back to Overview</button>
     <div class="section-title" style="margin-top:0;">Amount Collected by Month</div>
+    <div class="chart-box"><canvas id="chart-monthly-full"></canvas></div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Month</th><th>Amount Collected</th></tr></thead>
@@ -228,6 +284,13 @@
   </div>
 
   <div id="view-payments" class="view">
+    <div class="section-title" style="margin:0 0 10px;">Payments Reported by Tenants (Awaiting Confirmation)</div>
+    <div class="table-wrap" style="margin-bottom:24px;">
+      <table>
+        <thead><tr><th>Date</th><th>Area / Unit</th><th>Tenant</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th><th></th></tr></thead>
+        <tbody id="payment-claims-body"></tbody>
+      </table>
+    </div>
     <div class="toolbar">
       <div class="section-title" style="margin:0;">Payments Ledger</div>
       <button class="btn" id="add-payment-btn">+ Record Payment</button>
@@ -263,6 +326,34 @@
     </div>
   </div>
 
+  <div id="view-settings" class="view">
+    <div class="section-title" style="margin-top:0;">Payment Details Shown to Tenants</div>
+    <p style="font-size:0.82rem; color:var(--muted); margin-top:-4px;">Fill in whichever methods you accept. Leave a section blank to hide it from tenants. These are the details tenants see on the "How to Pay" page, and where they'll send Mobile Money or bank payments.</p>
+
+    <div class="section-title" style="font-size:0.95rem;">📱 Mobile Money</div>
+    <label>Provider</label>
+    <select id="settings-momo-provider">
+      <option value="">— Select —</option>
+      <option value="MTN Mobile Money">MTN Mobile Money</option>
+      <option value="Airtel Money">Airtel Money</option>
+      <option value="Other">Other</option>
+    </select>
+    <label>Mobile Money Number</label>
+    <input id="settings-momo-number" placeholder="e.g. 077XXXXXXX">
+    <label>Registered Name on the Mobile Money Account</label>
+    <input id="settings-momo-name" placeholder="e.g. Sserumpanise Micheal">
+
+    <div class="section-title" style="font-size:0.95rem;">🏦 Bank Account</div>
+    <label>Bank Name</label>
+    <input id="settings-bank-name" placeholder="e.g. Centenary Bank">
+    <label>Account Name</label>
+    <input id="settings-bank-account-name" placeholder="e.g. Namuyimba and Sons">
+    <label>Account Number</label>
+    <input id="settings-bank-account-number" placeholder="e.g. 3100XXXXXXX">
+
+    <button class="btn" id="save-payment-settings-btn" style="width:100%; margin-top:16px;">Save Payment Settings</button>
+  </div>
+
 </main>
 
 <div class="status-banner" id="status-banner">Loading...</div>
@@ -274,6 +365,7 @@
     <input type="hidden" id="tenant-id">
     <label>Area</label>
     <select id="tenant-area">
+      <option value="">None</option>
       <option value="Kiwenda">Kiwenda</option>
       <option value="Watuba">Watuba</option>
       <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
@@ -451,6 +543,10 @@ function startRealtimeSync() {
     activities = snap.docs.map(d => d.data());
     renderAll();
   }, err => { banner.textContent = 'Connection issue: ' + err.message; });
+  db.collection('paymentClaims').onSnapshot(snap => {
+    paymentClaims = snap.docs.map(d => d.data());
+    renderAll();
+  }, err => { banner.textContent = 'Connection issue: ' + err.message; });
 }
 
 async function fsSetTenant(t) { try { await db.collection('tenants').doc(t.id).set(t); } catch(e){ alert('Save failed: ' + e.message); } }
@@ -461,6 +557,28 @@ async function fsSetComplaint(c) { try { await db.collection('complaints').doc(c
 async function fsDeleteComplaint(id) { try { await db.collection('complaints').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
 async function fsSetActivity(a) { try { await db.collection('activities').doc(a.id).set(a); } catch(e){ alert('Save failed: ' + e.message); } }
 async function fsDeleteActivity(id) { try { await db.collection('activities').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
+async function fsSetPaymentClaim(c) { try { await db.collection('paymentClaims').doc(c.id).set(c); } catch(e){ alert('Save failed: ' + e.message); } }
+// Tenant-side, one-time (not real-time) read of the admin-set payment details — this is the
+// only collection the tenant page ever reads, so tenants never see rent/ledger/other-tenant data.
+async function fsGetPaymentInfo() {
+  try { await authReady; const doc = await db.collection('meta').doc('paymentInfo').get(); return doc.exists ? doc.data() : {}; }
+  catch (e) { return null; }
+}
+async function fsSetPaymentInfo(data) { await db.collection('meta').doc('paymentInfo').set(data, { merge: true }); }
+
+async function loadSettingsForm() {
+  let info = {};
+  try {
+    const doc = await db.collection('meta').doc('paymentInfo').get();
+    info = doc.exists ? doc.data() : {};
+  } catch (e) { /* leave form blank if this fails */ }
+  document.getElementById('settings-momo-provider').value = info.momoProvider || '';
+  document.getElementById('settings-momo-number').value = info.momoNumber || '';
+  document.getElementById('settings-momo-name').value = info.momoName || '';
+  document.getElementById('settings-bank-name').value = info.bankName || '';
+  document.getElementById('settings-bank-account-name').value = info.bankAccountName || '';
+  document.getElementById('settings-bank-account-number').value = info.bankAccountNumber || '';
+}
 // Atomically hands out the next receipt number so two admins sending receipts
 // at the same moment never get the same number.
 async function fsNextReceiptNumber() {
@@ -488,7 +606,9 @@ let tenants = [];
 let ledger = [];
 let complaints = [];
 let activities = [];
+let paymentClaims = [];
 let receiptCounter = 0;
+let confirmingClaimId = null; // set while the payment modal is prefilled from a tenant's payment claim
 
 const banner = document.getElementById('status-banner');
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -769,6 +889,7 @@ function renderAll() {
   renderMonthly();
   renderTenants();
   renderLedger();
+  renderPaymentClaims();
   renderComplaints();
   renderActivities();
   populateSelects();
@@ -778,6 +899,86 @@ function activateView(viewName) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewName).classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === viewName));
+  // Canvases draw at 0 width while their view is display:none, so redraw once visible.
+  if (viewName === 'overview') renderOverview();
+  if (viewName === 'monthly') renderMonthly();
+  if (viewName === 'settings') loadSettingsForm();
+}
+
+// Draws a simple labeled bar chart into a <canvas>, sized to the canvas's own
+// current on-screen width/height (so it stays sharp on any screen).
+function drawBarChart(canvasId, labels, values, opts) {
+  opts = opts || {};
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const cssWidth = canvas.clientWidth || 300;
+  const cssHeight = canvas.clientHeight || 220;
+  if (cssWidth === 0) return; // view not visible yet — will redraw when it is
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+  const padding = { left: 62, right: 14, top: 16, bottom: 34 };
+  const chartW = Math.max(cssWidth - padding.left - padding.right, 10);
+  const chartH = Math.max(cssHeight - padding.top - padding.bottom, 10);
+  const maxVal = Math.max(...values, 1);
+
+  ctx.strokeStyle = '#dfe6e1';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, padding.top + chartH);
+  ctx.lineTo(padding.left + chartW, padding.top + chartH);
+  ctx.stroke();
+
+  ctx.font = '11px Arial';
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + chartH - (chartH * i / 4);
+    const val = Math.round(maxVal * i / 4);
+    ctx.strokeStyle = '#eef2f0';
+    ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(padding.left + chartW, y); ctx.stroke();
+    ctx.fillStyle = '#6b7a72';
+    ctx.textAlign = 'right';
+    ctx.fillText(fmtShort(val), padding.left - 8, y + 4);
+  }
+
+  const n = values.length || 1;
+  const barGap = 10;
+  const barWidth = Math.max((chartW / n) - barGap, 4);
+  values.forEach((v, i) => {
+    const barH = maxVal > 0 ? (v / maxVal) * chartH : 0;
+    const x = padding.left + i * (chartW / n) + barGap / 2;
+    const y = padding.top + chartH - barH;
+    ctx.fillStyle = opts.color || '#2f6b4f';
+    ctx.fillRect(x, y, barWidth, barH);
+    ctx.fillStyle = '#23302a';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 10px Arial';
+    if (v > 0) ctx.fillText(fmtShort(v), x + barWidth / 2, y - 4);
+    ctx.fillStyle = '#6b7a72';
+    ctx.font = '10px Arial';
+    ctx.fillText(labels[i], x + barWidth / 2, padding.top + chartH + 16);
+  });
+}
+function fmtShort(n) {
+  n = Number(n) || 0;
+  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e3) return Math.round(n / 1e3) + 'k';
+  return String(Math.round(n));
+}
+function getLastNMonthsCollected(n) {
+  const now = new Date();
+  const labels = [], values = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.toISOString().slice(0, 7);
+    labels.push(d.toLocaleDateString('en-US', { month: 'short' }));
+    values.push(ledger.filter(l => l.type === 'Payment' && l.date && l.date.slice(0,7) === key).reduce((s,l) => s + Number(l.amount), 0));
+  }
+  return { labels, values };
 }
 
 function currentMonthKey() { return new Date().toISOString().slice(0,7); }
@@ -832,6 +1033,10 @@ function renderOverview() {
     const t = tenants.find(x => x.id === l.tenantId);
     return `<tr><td>${l.date}</td><td>${t ? escapeHtml(t.area) : '—'}</td><td>${t ? escapeHtml(t.name) : '—'}</td><td>${fmt(l.amount)}</td><td>${escapeHtml(l.note || '')}</td></tr>`;
   }).join('') : `<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>`;
+
+  const trend = getLastNMonthsCollected(6);
+  drawBarChart('chart-monthly-trend', trend.labels, trend.values, { color: '#2f6b4f' });
+  drawBarChart('chart-area-compare', AREAS.map(a => a.name.split(' ')[0]), AREAS.map(a => areaCollected(a.name, mKey)), { color: '#c98a3b' });
 }
 
 function renderMonthly() {
@@ -845,6 +1050,13 @@ function renderMonthly() {
   const body = document.getElementById('monthly-body');
   body.innerHTML = keys.length ? keys.map(k => `<tr><td>${monthLabel(k)}</td><td>${fmt(byMonth[k])}</td></tr>`).join('')
     : `<tr><td colspan="2" class="empty">No payments recorded yet.</td></tr>`;
+
+  const chronoKeys = keys.slice().reverse();
+  const chartLabels = chronoKeys.map(k => {
+    const [y,m] = k.split('-');
+    return new Date(Number(y), Number(m)-1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  });
+  drawBarChart('chart-monthly-full', chartLabels, chronoKeys.map(k => byMonth[k]), { color: '#2f6b4f' });
 }
 
 function renderTenants() {
@@ -903,6 +1115,56 @@ function renderLedger() {
     </tr>`;
   }).join('');
 }
+
+function renderPaymentClaims() {
+  const body = document.getElementById('payment-claims-body');
+  if (!body) return;
+  const rows = [...paymentClaims].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="8" class="empty">No tenant-reported payments yet.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(c => {
+    const badgeClass = c.status === 'Confirmed' ? 'done' : c.status === 'Rejected' ? 'owed' : 'new';
+    const actions = c.status === 'Pending'
+      ? `<button class="btn small" onclick="confirmPaymentClaim('${c.id}')">✅ Confirm</button>
+         <button class="btn small danger" onclick="rejectPaymentClaim('${c.id}')">✖ Reject</button>`
+      : '';
+    return `<tr>
+      <td>${c.date || ''}</td>
+      <td>${escapeHtml(c.area || '')}${c.unit ? ' / ' + escapeHtml(c.unit) : ''}</td>
+      <td>${escapeHtml(c.name || '')}</td>
+      <td>${fmt(c.amount)}</td>
+      <td>${escapeHtml(c.method || '')}</td>
+      <td>${escapeHtml(c.reference || '—')}</td>
+      <td><span class="badge ${badgeClass}">${c.status}</span></td>
+      <td class="row-actions">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+window.confirmPaymentClaim = function(claimId) {
+  const c = paymentClaims.find(x => x.id === claimId);
+  if (!c) return;
+  // Best-effort match to an existing tenant record by area + unit, so the payment modal
+  // opens with the right tenant preselected; admin can still change it before saving.
+  const match = tenants.find(t => t.area === c.area && (t.unit || '').trim().toLowerCase() === (c.unit || '').trim().toLowerCase());
+  openPaymentModal(match ? match.id : null, {
+    area: c.area,
+    amount: c.amount,
+    paidBy: ['Cash', 'Mobile Money', 'Bank'].includes(c.method) ? c.method : 'Mobile Money',
+    note: 'Tenant self-reported' + (c.reference ? ` (Ref: ${c.reference})` : '') + (c.note ? ' — ' + c.note : '')
+  });
+  confirmingClaimId = claimId;
+  if (!match) alert('No exact tenant match was found for "' + c.name + '" — please pick the right tenant from the list before saving.');
+};
+
+window.rejectPaymentClaim = async function(claimId) {
+  const c = paymentClaims.find(x => x.id === claimId);
+  if (!c) return;
+  if (!confirm('Mark this tenant-reported payment as rejected/not received? This does not delete their report.')) return;
+  await fsSetPaymentClaim({ ...c, status: 'Rejected' });
+};
 
 function renderComplaints() {
   const body = document.getElementById('complaints-body');
@@ -987,6 +1249,67 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 document.getElementById('payment-area').addEventListener('change', populatePaymentTenantSelect);
 document.getElementById('payment-tenant').addEventListener('change', updatePaymentSaveState);
 
+let resizeChartTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeChartTimer);
+  resizeChartTimer = setTimeout(() => {
+    const activeView = document.querySelector('.view.active');
+    if (!activeView) return;
+    if (activeView.id === 'view-overview') renderOverview();
+    if (activeView.id === 'view-monthly') renderMonthly();
+  }, 200);
+});
+
+document.getElementById('save-payment-settings-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('save-payment-settings-btn');
+  const data = {
+    momoProvider: document.getElementById('settings-momo-provider').value,
+    momoNumber: document.getElementById('settings-momo-number').value.trim(),
+    momoName: document.getElementById('settings-momo-name').value.trim(),
+    bankName: document.getElementById('settings-bank-name').value.trim(),
+    bankAccountName: document.getElementById('settings-bank-account-name').value.trim(),
+    bankAccountNumber: document.getElementById('settings-bank-account-number').value.trim()
+  };
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    await fsSetPaymentInfo(data);
+    btn.textContent = '✅ Saved';
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+    btn.textContent = 'Save Payment Settings';
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Save Payment Settings'; }, 1500);
+});
+
+// ---- Installable app (PWA): install prompt + offline app-shell caching ----
+// This makes the site installable to a phone's home screen (opens full-screen,
+// works with a cached shell when offline). It is not a downloadable .apk file.
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById('install-app-btn');
+  if (btn) btn.style.display = 'block';
+});
+const installBtn = document.getElementById('install-app-btn');
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installBtn.style.display = 'none';
+  });
+}
+window.addEventListener('appinstalled', () => {
+  if (installBtn) installBtn.style.display = 'none';
+});
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
 // ---- Role gate with admin password ----
 document.getElementById('gate-admin').addEventListener('click', () => {
   document.getElementById('gate-buttons').style.display = 'none';
@@ -1015,6 +1338,8 @@ function goBackToGate() {
   document.getElementById('tenant-app').style.display = 'none';
   document.getElementById('tenant-form-wrap').style.display = 'block';
   document.getElementById('tenant-confirm').style.display = 'none';
+  document.getElementById('tenant-payclaim-wrap').style.display = 'block';
+  document.getElementById('pc-confirm').style.display = 'none';
   document.getElementById('gate-buttons').style.display = 'block';
   document.getElementById('gate-password-form').style.display = 'none';
   document.getElementById('role-gate').style.display = 'flex';
@@ -1022,6 +1347,10 @@ function goBackToGate() {
 document.getElementById('gate-tenant').addEventListener('click', () => {
   document.getElementById('role-gate').style.display = 'none';
   document.getElementById('tenant-app').style.display = 'block';
+  document.getElementById('pc-date').value = todayStr();
+  updateTenantComplaintSubmitState();
+  updatePaymentClaimSubmitState();
+  loadTenantPayInfo();
 });
 document.getElementById('tenant-back').addEventListener('click', goBackToGate);
 document.getElementById('tenant-back-top').addEventListener('click', goBackToGate);
@@ -1173,13 +1502,24 @@ document.getElementById('c-record-btn').addEventListener('click', async () => {
 });
 document.getElementById('c-voice-delete').addEventListener('click', resetVoiceRecording);
 
+function updateTenantComplaintSubmitState() {
+  const area = document.getElementById('c-area').value;
+  const btn = document.getElementById('c-submit');
+  btn.disabled = !area;
+  btn.style.opacity = area ? '1' : '0.5';
+  btn.style.cursor = area ? 'pointer' : 'not-allowed';
+}
+document.getElementById('c-area').addEventListener('change', updateTenantComplaintSubmitState);
+
 document.getElementById('c-submit').addEventListener('click', async () => {
+  const area = document.getElementById('c-area').value;
   const unit = document.getElementById('c-unit').value.trim();
   const name = document.getElementById('c-name').value.trim();
   const message = document.getElementById('c-message').value.trim();
+  if (!area) { alert('Please select your area.'); return; }
   if (!unit || !name || !message) { alert('Please fill in your unit, name, and message.'); return; }
   const entry = {
-    id: uid(), area: document.getElementById('c-area').value, unit, name,
+    id: uid(), area, unit, name,
     phone: document.getElementById('c-phone').value.trim(), message, date: todayStr(), status: 'New',
     voiceNote: voiceNoteDataUrl || null
   };
@@ -1191,27 +1531,131 @@ document.getElementById('c-submit').addEventListener('click', async () => {
   } catch (e) {
     alert('Could not send — please check your internet connection and try again. (' + e.message + ')');
     submitBtn.disabled = false; submitBtn.textContent = 'Submit';
+    updateTenantComplaintSubmitState();
     return;
   }
-  submitBtn.disabled = false; submitBtn.textContent = 'Submit';
+  submitBtn.textContent = 'Submit';
   document.getElementById('tenant-form-wrap').style.display = 'none';
   document.getElementById('tenant-confirm').style.display = 'block';
 });
 document.getElementById('c-another').addEventListener('click', () => {
+  document.getElementById('c-area').value = '';
   document.getElementById('c-unit').value = '';
   document.getElementById('c-name').value = '';
   document.getElementById('c-phone').value = '';
   document.getElementById('c-message').value = '';
   resetVoiceRecording();
+  updateTenantComplaintSubmitState();
   document.getElementById('tenant-confirm').style.display = 'none';
   document.getElementById('tenant-form-wrap').style.display = 'block';
 });
 
+// ---- Tenant "How to Pay" + payment self-report ----
+window.copyToClipboard = function(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => prompt('Copy this:', text));
+  } else {
+    prompt('Copy this:', text);
+  }
+};
+
+async function loadTenantPayInfo() {
+  const box = document.getElementById('tenant-pay-info');
+  box.innerHTML = 'Loading payment details...';
+  const info = await fsGetPaymentInfo();
+  if (!info || (!info.momoNumber && !info.bankAccountNumber)) {
+    box.innerHTML = `<p style="font-size:0.85rem; color:var(--muted);">Payment details have not been set up yet — please contact property management directly to arrange payment.</p>`;
+    return;
+  }
+  let html = '';
+  if (info.momoNumber) {
+    html += `
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px;">
+        <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">${escapeHtml(info.momoProvider || 'Mobile Money')}</div>
+        <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(info.momoNumber)}</div>
+        ${info.momoName ? `<div style="font-size:0.8rem; color:var(--muted);">Registered to: ${escapeHtml(info.momoName)}</div>` : ''}
+        <button class="btn small secondary" style="margin-top:8px;" onclick="copyToClipboard('${escapeHtml(info.momoNumber)}')">📋 Copy number</button>
+      </div>`;
+  }
+  if (info.bankAccountNumber) {
+    html += `
+      <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px;">
+        <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">${escapeHtml(info.bankName || 'Bank')}</div>
+        <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(info.bankAccountNumber)}</div>
+        ${info.bankAccountName ? `<div style="font-size:0.8rem; color:var(--muted);">Account name: ${escapeHtml(info.bankAccountName)}</div>` : ''}
+        <button class="btn small secondary" style="margin-top:8px;" onclick="copyToClipboard('${escapeHtml(info.bankAccountNumber)}')">📋 Copy account number</button>
+      </div>`;
+  }
+  box.innerHTML = html;
+}
+
+function updatePaymentClaimSubmitState() {
+  const area = document.getElementById('pc-area').value;
+  const btn = document.getElementById('pc-submit');
+  btn.disabled = !area;
+  btn.style.opacity = area ? '1' : '0.5';
+  btn.style.cursor = area ? 'pointer' : 'not-allowed';
+}
+document.getElementById('pc-area').addEventListener('change', updatePaymentClaimSubmitState);
+
+document.getElementById('pc-submit').addEventListener('click', async () => {
+  const area = document.getElementById('pc-area').value;
+  const unit = document.getElementById('pc-unit').value.trim();
+  const name = document.getElementById('pc-name').value.trim();
+  const amount = Number(document.getElementById('pc-amount').value);
+  if (!area) { alert('Please select your area.'); return; }
+  if (!unit || !name || !amount) { alert('Please fill in your unit, name, and the amount you paid.'); return; }
+  const entry = {
+    id: uid(), area, unit, name, amount,
+    method: document.getElementById('pc-method').value,
+    reference: document.getElementById('pc-reference').value.trim(),
+    date: document.getElementById('pc-date').value || todayStr(),
+    note: document.getElementById('pc-note').value.trim(),
+    status: 'Pending'
+  };
+  const submitBtn = document.getElementById('pc-submit');
+  submitBtn.disabled = true; submitBtn.textContent = 'Sending...';
+  try {
+    await authReady;
+    await db.collection('paymentClaims').doc(entry.id).set(entry);
+  } catch (e) {
+    alert('Could not send — please check your internet connection and try again. (' + e.message + ')');
+    submitBtn.textContent = 'Submit Payment Report';
+    updatePaymentClaimSubmitState();
+    return;
+  }
+  submitBtn.textContent = 'Submit Payment Report';
+  document.getElementById('tenant-payclaim-wrap').style.display = 'none';
+  document.getElementById('pc-confirm').style.display = 'block';
+});
+document.getElementById('pc-another').addEventListener('click', () => {
+  document.getElementById('pc-area').value = '';
+  document.getElementById('pc-unit').value = '';
+  document.getElementById('pc-name').value = '';
+  document.getElementById('pc-amount').value = '';
+  document.getElementById('pc-method').value = 'Mobile Money';
+  document.getElementById('pc-reference').value = '';
+  document.getElementById('pc-date').value = todayStr();
+  document.getElementById('pc-note').value = '';
+  updatePaymentClaimSubmitState();
+  document.getElementById('pc-confirm').style.display = 'none';
+  document.getElementById('tenant-payclaim-wrap').style.display = 'block';
+});
+
 const tenantModalBg = document.getElementById('tenant-modal-bg');
+function updateTenantSaveState() {
+  const area = document.getElementById('tenant-area').value;
+  const btn = document.getElementById('tenant-save');
+  btn.disabled = !area;
+  btn.style.opacity = area ? '1' : '0.5';
+  btn.style.cursor = area ? 'pointer' : 'not-allowed';
+}
+document.getElementById('tenant-area').addEventListener('change', updateTenantSaveState);
+
 document.getElementById('add-tenant-btn').addEventListener('click', () => {
   document.getElementById('tenant-modal-title').textContent = 'Add Tenant';
   document.getElementById('tenant-id').value = '';
-  document.getElementById('tenant-area').value = 'Kiwenda';
+  document.getElementById('tenant-area').value = '';
   document.getElementById('tenant-unit').value = '';
   document.getElementById('tenant-name').value = '';
   document.getElementById('tenant-whatsapp').value = '';
@@ -1220,6 +1664,7 @@ document.getElementById('add-tenant-btn').addEventListener('click', () => {
   document.getElementById('tenant-rent').value = '';
   document.getElementById('tenant-opening-balance').value = '';
   document.getElementById('tenant-status').value = 'Active';
+  updateTenantSaveState();
   tenantModalBg.classList.add('active');
 });
 document.getElementById('tenant-cancel').addEventListener('click', () => tenantModalBg.classList.remove('active'));
@@ -1238,6 +1683,7 @@ window.editTenant = function(id) {
   document.getElementById('tenant-rent').value = t.rent || '';
   document.getElementById('tenant-opening-balance').value = '';
   document.getElementById('tenant-status').value = t.status;
+  updateTenantSaveState();
   tenantModalBg.classList.add('active');
 };
 
@@ -1250,13 +1696,15 @@ window.deleteTenant = async function(id) {
 
 document.getElementById('tenant-save').addEventListener('click', async () => {
   const id = document.getElementById('tenant-id').value;
+  const area = document.getElementById('tenant-area').value;
   const unit = document.getElementById('tenant-unit').value.trim();
   const name = document.getElementById('tenant-name').value.trim();
+  if (!area) { alert('Please select an area.'); return; }
   if (!unit || !name) { alert('Please enter at least the unit and tenant name.'); return; }
   const newRent = Number(document.getElementById('tenant-rent').value || 0);
   const moveIn = document.getElementById('tenant-movein').value;
   const data = {
-    area: document.getElementById('tenant-area').value, unit, name,
+    area, unit, name,
     whatsapp: document.getElementById('tenant-whatsapp').value.trim(),
     otherPhone: document.getElementById('tenant-other-phone').value.trim(),
     moveIn,
@@ -1293,18 +1741,19 @@ document.getElementById('tenant-save').addEventListener('click', async () => {
 
 
 const paymentModalBg = document.getElementById('payment-modal-bg');
-window.openPaymentModal = function(tenantId) {
+window.openPaymentModal = function(tenantId, prefill) {
   const t = tenantId ? tenants.find(x => x.id === tenantId) : null;
+  confirmingClaimId = null;
   document.getElementById('payment-modal-title').textContent = 'Record Payment';
   document.getElementById('payment-edit-id').value = '';
-  document.getElementById('payment-area').value = t ? t.area : '';
+  document.getElementById('payment-area').value = t ? t.area : (prefill && prefill.area) || '';
   populatePaymentTenantSelect();
   if (t) document.getElementById('payment-tenant').value = tenantId;
   document.getElementById('payment-date').value = todayStr();
-  document.getElementById('payment-amount').value = '';
+  document.getElementById('payment-amount').value = (prefill && prefill.amount) || '';
   document.getElementById('payment-receivedby').value = 'SSERUMPANISE MICHEAL';
-  document.getElementById('payment-paidby').value = 'Cash';
-  document.getElementById('payment-note').value = '';
+  document.getElementById('payment-paidby').value = (prefill && prefill.paidBy) || 'Cash';
+  document.getElementById('payment-note').value = (prefill && prefill.note) || '';
   updatePaymentSaveState();
   paymentModalBg.classList.add('active');
 };
@@ -1312,6 +1761,7 @@ window.openPaymentModal = function(tenantId) {
 window.editLedgerPayment = function(ledgerId) {
   const l = ledger.find(x => x.id === ledgerId);
   if (!l) return;
+  confirmingClaimId = null;
   const t = tenants.find(x => x.id === l.tenantId);
   document.getElementById('payment-modal-title').textContent = l.receiptNo ? `Edit Payment (Receipt No. ${l.receiptNo} already issued)` : 'Edit Payment';
   document.getElementById('payment-edit-id').value = l.id;
@@ -1328,7 +1778,7 @@ window.editLedgerPayment = function(ledgerId) {
 };
 
 document.getElementById('add-payment-btn').addEventListener('click', () => openPaymentModal(null));
-document.getElementById('payment-cancel').addEventListener('click', () => paymentModalBg.classList.remove('active'));
+document.getElementById('payment-cancel').addEventListener('click', () => { confirmingClaimId = null; paymentModalBg.classList.remove('active'); });
 document.getElementById('payment-save').addEventListener('click', async () => {
   const editId = document.getElementById('payment-edit-id').value;
   const tenantId = document.getElementById('payment-tenant').value;
@@ -1354,6 +1804,11 @@ document.getElementById('payment-save').addEventListener('click', async () => {
   }
   renderAll();
   await fsSetLedger(finalEntry);
+  if (confirmingClaimId) {
+    const c = paymentClaims.find(x => x.id === confirmingClaimId);
+    if (c) await fsSetPaymentClaim({ ...c, status: 'Confirmed', ledgerId: finalEntry.id });
+    confirmingClaimId = null;
+  }
   paymentModalBg.classList.remove('active');
 });
 
