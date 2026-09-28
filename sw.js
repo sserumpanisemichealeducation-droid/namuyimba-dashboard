@@ -1,10 +1,4 @@
-// Minimal service worker for the NAMUYIMBA and SONS dashboard.
-// Purpose: (1) let Chrome/Android treat this site as an installable app,
-// (2) cache the app shell (index.html) so it still opens with no internet.
-// Live data (tenants, ledger, complaints, payments) always comes from
-// Firestore when online — this cache is only a fallback for the page itself.
-
-const CACHE_NAME = 'namuyimba-shell-v1';
+const CACHE_NAME = 'namuyimba-shell-v2';
 const APP_SHELL = ['./', './index.html'];
 
 self.addEventListener('install', (event) => {
@@ -23,10 +17,9 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-first for the app shell so users always get the latest version
-// when online; falls back to the cached copy only when offline.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== self.location.origin) return;
   event.respondWith(
     fetch(event.request)
       .then((resp) => {
