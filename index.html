@@ -152,6 +152,19 @@
   </div>
 </div>
 
+<div class="modal-bg" id="admin-pw-modal-bg">
+  <div class="modal">
+    <h3 id="admin-pw-title">Set password</h3>
+    <label>New password (at least 4 characters)</label>
+    <input id="admin-pw-input" type="text" autocomplete="off" placeholder="Type the new password">
+    <p style="font-size:0.75rem; color:var(--muted);">Tell the admin their new password yourself. It is stored only as a scrambled fingerprint, so it can't be shown again later — set a new one if it's forgotten.</p>
+    <div class="modal-actions">
+      <button class="btn secondary" id="admin-pw-cancel">Cancel</button>
+      <button class="btn" id="admin-pw-save">Save password</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="install-help-bg">
   <div class="modal">
     <h3>Install this app</h3>
@@ -370,10 +383,12 @@
 
   <div id="view-admins" class="view">
     <div class="section-title" style="margin-top:0;">Manage Admins (Chief Admin only)</div>
-    <p style="font-size:0.82rem; color:var(--muted); margin-top:-4px;">These names appear on the login screen and in the "Received by" / "Entered by" lists. New admins log in with the regular admin password.</p>
+    <p style="font-size:0.82rem; color:var(--muted); margin-top:-4px;">These names appear on the login screen and in the "Received by" / "Entered by" lists. Use "Set password" to give an admin their own login password (for example when they want to change from 1234). Admins with no personal password use the default one.</p>
     <div id="admins-list"></div>
     <label>Add a new admin</label>
     <input id="new-admin-name" placeholder="Full name, e.g. John Mukasa">
+    <label>Starting password (optional — leave blank to use the default)</label>
+    <input id="new-admin-password" type="text" autocomplete="off" placeholder="e.g. a password you give them">
     <button class="btn" id="add-admin-btn" style="width:100%; margin-top:12px;">+ Add Admin</button>
   </div>
 
@@ -714,6 +729,8 @@ const CHIEF_HASH = 'd3e2e2d07b960db4774b9a651eaff8cf0df182ffc088a67b2f31ef87a8af
 const PW_SALT = 'namuyimba-chief|';
 const DEFAULT_ADMINS = ['Salongo Namuyimba Paul', 'Nalongo Namuyimba Sylvia', 'SSERUMPANISE MICHEAL', 'Ssekiranda Moses', 'Ssebuufu Henry'];
 let adminNames = DEFAULT_ADMINS.slice();
+let adminPw = {}; // per-admin password fingerprints set by the Chief Admin (admins without one use the shared password)
+const PW_SALT_USER = 'namuyimba-admin|';
 let currentAdminName = '';
 let pendingAdminName = '';
 function isChief() { return currentAdminName === CHIEF_ADMIN; }
@@ -766,6 +783,8 @@ async function sha256Hex(str) {
 }
 async function verifyAdminPassword(name, pw) {
   if (name === CHIEF_ADMIN) return (await sha256Hex(PW_SALT + pw)) === CHIEF_HASH;
+  const custom = adminPw[name];
+  if (custom) return (await sha256Hex(PW_SALT_USER + name + '|' + pw)) === custom;
   return pw === ADMIN_PASSWORD;
 }
 
@@ -787,31 +806,63 @@ function populateAdminSelects() {
   });
 }
 async function loadAdminList() {
+  let ok = true;
   try {
     await authReady;
     const doc = await db.collection('meta').doc('admins').get();
-    if (doc.exists && Array.isArray(doc.data().names) && doc.data().names.length) adminNames = doc.data().names;
-  } catch (e) { /* keep the current list */ }
+    if (doc.exists) {
+      const d = doc.data();
+      if (Array.isArray(d.names) && d.names.length) adminNames = d.names;
+      adminPw = (d.pw && typeof d.pw === 'object') ? d.pw : {};
+    }
+  } catch (e) { ok = false; /* keep the current list */ }
   if (!adminNames.includes(CHIEF_ADMIN)) adminNames.unshift(CHIEF_ADMIN);
   populateAdminSelects();
   renderAdminsView();
+  return ok;
 }
 async function saveAdminList() {
-  await db.collection('meta').doc('admins').set({ names: adminNames });
+  await db.collection('meta').doc('admins').set({ names: adminNames, pw: adminPw });
 }
 function renderAdminsView() {
   const box = document.getElementById('admins-list');
   if (!box) return;
   box.innerHTML = adminNames.map((n, i) => n === CHIEF_ADMIN
     ? `<div class="admin-row"><span>${escapeHtml(n)} <span class="badge active">Chief Admin</span></span></div>`
-    : `<div class="admin-row"><span>${escapeHtml(n)}</span><button class="btn small danger" onclick="removeAdmin(${i})">Remove</button></div>`).join('');
+    : `<div class="admin-row"><span>${escapeHtml(n)}<br><span style="font-size:0.72rem; color:var(--muted);">${adminPw[n] ? '🔑 personal password set' : 'default password'}</span></span>
+        <span style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+          <button class="btn small" onclick="setAdminPassword(${i})">Set password</button>
+          ${adminPw[n] ? `<button class="btn small secondary" onclick="resetAdminPassword(${i})">Reset</button>` : ''}
+          <button class="btn small danger" onclick="removeAdmin(${i})">Remove</button>
+        </span></div>`).join('');
 }
+let pwModalAdmin = '';
+window.setAdminPassword = function(i) {
+  if (!requireChief()) return;
+  const name = adminNames[i];
+  if (!name || name === CHIEF_ADMIN) return;
+  pwModalAdmin = name;
+  document.getElementById('admin-pw-title').textContent = 'Set password for ' + name;
+  document.getElementById('admin-pw-input').value = '';
+  document.getElementById('admin-pw-modal-bg').classList.add('active');
+};
+window.resetAdminPassword = async function(i) {
+  if (!requireChief()) return;
+  const name = adminNames[i];
+  if (!name || name === CHIEF_ADMIN) return;
+  if (!confirm('Reset ' + name + ' back to the default admin password (1234)?')) return;
+  delete adminPw[name];
+  try { await saveAdminList(); } catch (e) { alert('Save failed: ' + e.message); await loadAdminList(); return; }
+  renderAdminsView();
+  auditLog('Reset login password for ' + name + ' to the default');
+};
 window.removeAdmin = async function(i) {
   if (!requireChief()) return;
   const name = adminNames[i];
   if (!name || name === CHIEF_ADMIN) return;
   if (!confirm('Remove ' + name + ' as an admin? Their past records and receipts stay as they are.')) return;
   adminNames.splice(i, 1);
+  delete adminPw[name];
   try { await saveAdminList(); } catch (e) { alert('Save failed: ' + e.message); await loadAdminList(); return; }
   populateAdminSelects(); renderAdminsView();
   auditLog('Removed admin ' + name);
@@ -1554,6 +1605,22 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+document.getElementById('admin-pw-cancel').addEventListener('click', () => document.getElementById('admin-pw-modal-bg').classList.remove('active'));
+document.getElementById('admin-pw-save').addEventListener('click', async () => {
+  if (!requireChief()) return;
+  const pw = document.getElementById('admin-pw-input').value;
+  if (pw.length < 4) { alert('Please use at least 4 characters.'); return; }
+  const name = pwModalAdmin;
+  if (!name || !adminNames.includes(name) || name === CHIEF_ADMIN) return;
+  adminPw[name] = await sha256Hex(PW_SALT_USER + name + '|' + pw);
+  try { await saveAdminList(); } catch (e) { alert('Save failed: ' + e.message); await loadAdminList(); return; }
+  document.getElementById('admin-pw-modal-bg').classList.remove('active');
+  document.getElementById('admin-pw-input').value = '';
+  renderAdminsView();
+  auditLog('Changed login password for ' + name);
+  alert('Password saved. Tell ' + name + ' their new password.');
+});
+
 document.getElementById('add-admin-btn').addEventListener('click', async () => {
   if (!requireChief()) return;
   const input = document.getElementById('new-admin-name');
@@ -1561,9 +1628,13 @@ document.getElementById('add-admin-btn').addEventListener('click', async () => {
   if (!name) { alert('Please type the new admin\'s name.'); return; }
   if (name.length > 60) { alert('That name is too long.'); return; }
   if (adminNames.some(n => n.toLowerCase() === name.toLowerCase())) { alert('That name is already on the list.'); return; }
+  const startPw = document.getElementById('new-admin-password').value;
+  if (startPw && startPw.length < 4) { alert('A password needs at least 4 characters (or leave it blank).'); return; }
   adminNames.push(name);
+  if (startPw) adminPw[name] = await sha256Hex(PW_SALT_USER + name + '|' + startPw);
   try { await saveAdminList(); } catch (e) { alert('Save failed: ' + e.message); await loadAdminList(); return; }
   input.value = '';
+  document.getElementById('new-admin-password').value = '';
   populateAdminSelects(); renderAdminsView();
   auditLog('Added admin ' + name);
 });
@@ -1715,6 +1786,11 @@ document.getElementById('gate-password-cancel').addEventListener('click', () => 
 });
 document.getElementById('gate-password-submit').addEventListener('click', async () => {
   const val = document.getElementById('gate-password-input').value;
+  if (pendingAdminName !== CHIEF_ADMIN) {
+    // make sure we have this admin's latest password settings before checking
+    const ok = await loadAdminList();
+    if (!ok) { alert('Could not check your password — please check your internet connection and try again.'); return; }
+  }
   if (await verifyAdminPassword(pendingAdminName, val)) {
     currentAdminName = pendingAdminName;
     applyRolePermissions();
