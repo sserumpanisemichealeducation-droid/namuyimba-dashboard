@@ -49,6 +49,7 @@
   .card.top .num { font-size: 1.05rem; color: var(--accent); }
 
   .area-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .admin-row { display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:8px; }
   .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 20px; }
   .chart-box canvas { width: 100%; height: 220px; display: block; }
   .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
@@ -252,7 +253,7 @@
 <div id="app-shell">
 <header>
   <h1>🏠 NAMUYIMBA and SONS</h1>
-  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> &nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
+  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> <span class="chief-only" style="display:none;">&nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></span> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
   <input type="file" id="restore-file-input" accept="application/json" style="display:none;">
   <p id="admin-session-label" style="font-size:0.75rem; color:var(--muted); margin-top:4px;"></p>
 </header>
@@ -263,7 +264,8 @@
   <button class="tab-btn" data-view="payments">Payments</button>
   <button class="tab-btn" data-view="complaints">Complaints</button>
   <button class="tab-btn" data-view="activities">Activity Log</button>
-  <button class="tab-btn" data-view="settings">Payment Settings</button>
+  <button class="tab-btn chief-only" data-view="settings" style="display:none;">Payment Settings</button>
+  <button class="tab-btn chief-only" data-view="admins" style="display:none;">Admins</button>
 </nav>
 
 <main>
@@ -364,6 +366,15 @@
         <tbody id="activities-body"></tbody>
       </table>
     </div>
+  </div>
+
+  <div id="view-admins" class="view">
+    <div class="section-title" style="margin-top:0;">Manage Admins (Chief Admin only)</div>
+    <p style="font-size:0.82rem; color:var(--muted); margin-top:-4px;">These names appear on the login screen and in the "Received by" / "Entered by" lists. New admins log in with the regular admin password.</p>
+    <div id="admins-list"></div>
+    <label>Add a new admin</label>
+    <input id="new-admin-name" placeholder="Full name, e.g. John Mukasa">
+    <button class="btn" id="add-admin-btn" style="width:100%; margin-top:12px;">+ Add Admin</button>
   </div>
 
   <div id="view-settings" class="view">
@@ -696,7 +707,120 @@ const AREAS = [
   { name: 'Wankulukuku Guest House', units: null },
   { name: 'Bunamwaya', units: 17 }
 ];
-const ADMIN_PASSWORD = '1234';
+const ADMIN_PASSWORD = '1234'; // shared password for regular admins
+// The Chief Admin's password is never written in this file — only a salted SHA-256 fingerprint of it.
+const CHIEF_ADMIN = 'SSERUMPANISE MICHEAL';
+const CHIEF_HASH = 'd3e2e2d07b960db4774b9a651eaff8cf0df182ffc088a67b2f31ef87a8af6e8a';
+const PW_SALT = 'namuyimba-chief|';
+const DEFAULT_ADMINS = ['Salongo Namuyimba Paul', 'Nalongo Namuyimba Sylvia', 'SSERUMPANISE MICHEAL', 'Ssekiranda Moses', 'Ssebuufu Henry'];
+let adminNames = DEFAULT_ADMINS.slice();
+let currentAdminName = '';
+let pendingAdminName = '';
+function isChief() { return currentAdminName === CHIEF_ADMIN; }
+function requireChief() {
+  if (isChief()) return true;
+  alert('Only the Chief Admin can do this.');
+  return false;
+}
+
+// SHA-256 (uses the browser's built-in version when available, with a small fallback for plain http/file pages)
+function sha256Fallback(str) {
+  const K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const bytes = Array.from(new TextEncoder().encode(str));
+  const bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i >= 4 ? 0 : (bitLen >>> (i * 8)) & 0xff);
+  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let off = 0; off < bytes.length; off += 64) {
+    const w = new Array(64);
+    for (let i = 0; i < 16; i++) w[i] = (bytes[off+i*4]<<24)|(bytes[off+i*4+1]<<16)|(bytes[off+i*4+2]<<8)|bytes[off+i*4+3];
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i-15],7) ^ rotr(w[i-15],18) ^ (w[i-15]>>>3);
+      const s1 = rotr(w[i-2],17) ^ rotr(w[i-2],19) ^ (w[i-2]>>>10);
+      w[i] = (w[i-16] + s0 + w[i-7] + s1) | 0;
+    }
+    let [a,b,c,d,e,f,g,hh] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (hh + S1 + ch + K[i] + w[i]) | 0;
+      const S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    H = [(H[0]+a)|0,(H[1]+b)|0,(H[2]+c)|0,(H[3]+d)|0,(H[4]+e)|0,(H[5]+f)|0,(H[6]+g)|0,(H[7]+hh)|0];
+  }
+  return H.map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+}
+async function sha256Hex(str) {
+  if (window.crypto && crypto.subtle) {
+    try {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) { /* fall through */ }
+  }
+  return sha256Fallback(str);
+}
+async function verifyAdminPassword(name, pw) {
+  if (name === CHIEF_ADMIN) return (await sha256Hex(PW_SALT + pw)) === CHIEF_HASH;
+  return pw === ADMIN_PASSWORD;
+}
+
+function setSelectValue(id, val) {
+  const sel = document.getElementById(id);
+  if (val && ![...sel.options].some(o => o.value === val)) {
+    const o = document.createElement('option'); o.textContent = val; sel.appendChild(o);
+  }
+  sel.value = val;
+}
+function populateAdminSelects() {
+  const opts = adminNames.map(n => `<option>${escapeHtml(n)}</option>`).join('');
+  [['gate-admin-name', '<option value="">— Select your name —</option>'], ['payment-receivedby', ''], ['activity-enteredby', '']].forEach(([id, head]) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = head + opts;
+    if (cur && adminNames.includes(cur)) sel.value = cur;
+  });
+}
+async function loadAdminList() {
+  try {
+    await authReady;
+    const doc = await db.collection('meta').doc('admins').get();
+    if (doc.exists && Array.isArray(doc.data().names) && doc.data().names.length) adminNames = doc.data().names;
+  } catch (e) { /* keep the current list */ }
+  if (!adminNames.includes(CHIEF_ADMIN)) adminNames.unshift(CHIEF_ADMIN);
+  populateAdminSelects();
+  renderAdminsView();
+}
+async function saveAdminList() {
+  await db.collection('meta').doc('admins').set({ names: adminNames });
+}
+function renderAdminsView() {
+  const box = document.getElementById('admins-list');
+  if (!box) return;
+  box.innerHTML = adminNames.map((n, i) => n === CHIEF_ADMIN
+    ? `<div class="admin-row"><span>${escapeHtml(n)} <span class="badge active">Chief Admin</span></span></div>`
+    : `<div class="admin-row"><span>${escapeHtml(n)}</span><button class="btn small danger" onclick="removeAdmin(${i})">Remove</button></div>`).join('');
+}
+window.removeAdmin = async function(i) {
+  if (!requireChief()) return;
+  const name = adminNames[i];
+  if (!name || name === CHIEF_ADMIN) return;
+  if (!confirm('Remove ' + name + ' as an admin? Their past records and receipts stay as they are.')) return;
+  adminNames.splice(i, 1);
+  try { await saveAdminList(); } catch (e) { alert('Save failed: ' + e.message); await loadAdminList(); return; }
+  populateAdminSelects(); renderAdminsView();
+  auditLog('Removed admin ' + name);
+};
+function applyRolePermissions() {
+  document.querySelectorAll('.chief-only').forEach(el => { el.style.display = isChief() ? '' : 'none'; });
+  const label = document.getElementById('admin-session-label');
+  if (label) label.textContent = currentAdminName ? ('Logged in as: ' + currentAdminName + (isChief() ? ' — Chief Admin' : ' — Admin')) : '';
+}
 
 let tenants = [];
 let ledger = [];
@@ -994,6 +1118,7 @@ function renderAll() {
 }
 
 function activateView(viewName) {
+  if ((viewName === 'settings' || viewName === 'admins') && !isChief()) return;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + viewName).classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === viewName));
@@ -1001,6 +1126,7 @@ function activateView(viewName) {
   if (viewName === 'overview') renderOverview();
   if (viewName === 'monthly') renderMonthly();
   if (viewName === 'settings') loadSettingsForm();
+  if (viewName === 'admins') loadAdminList();
 }
 
 // Draws a simple labeled bar chart into a <canvas>, sized to the canvas's own
@@ -1242,7 +1368,7 @@ function renderTenants() {
         <button class="btn small" onclick="openPaymentModal('${t.id}')">Payment</button>
         <button class="btn small secondary" onclick="addExtraCharge('${t.id}')">Add Charge</button>
         <button class="icon-btn" onclick="editTenant('${t.id}')">✏️</button>
-        <button class="icon-btn" onclick="deleteTenant('${t.id}')">🗑️</button>
+        ${isChief() ? `<button class="icon-btn" onclick="deleteTenant('${t.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -1270,7 +1396,7 @@ function renderLedger() {
       <td>${escapeHtml(l.receivedBy || '')}</td>
       <td>${escapeHtml(l.paidBy || '')}</td>
       <td>${escapeHtml(l.note || '')}</td>
-      <td class="row-actions">${editBtn}${receiptBtn}<button class="icon-btn" onclick="deleteLedgerEntry('${l.id}')">🗑️</button></td>
+      <td class="row-actions">${editBtn}${receiptBtn}${isChief() ? `<button class="icon-btn" onclick="deleteLedgerEntry('${l.id}')">🗑️</button>` : ''}</td>
     </tr>`;
   }).join('');
 }
@@ -1288,7 +1414,7 @@ function renderPaymentClaims() {
     const actions = c.status === 'Pending'
       ? `<button class="btn small" onclick="confirmPaymentClaim('${c.id}')">✅ Confirm</button>
          <button class="btn small danger" onclick="rejectPaymentClaim('${c.id}')">✖ Reject</button>`
-      : `<button class="btn small danger" onclick="deletePaymentClaim('${c.id}')">🗑️ Delete</button>`;
+      : (isChief() ? `<button class="btn small danger" onclick="deletePaymentClaim('${c.id}')">🗑️ Delete</button>` : '');
     return `<tr>
       <td>${c.date || ''}</td>
       <td>${escapeHtml(c.area || '')}${c.unit ? ' / ' + escapeHtml(c.unit) : ''}</td>
@@ -1327,6 +1453,7 @@ window.rejectPaymentClaim = async function(claimId) {
 };
 
 window.deletePaymentClaim = async function(claimId) {
+  if (!requireChief()) return;
   if (!confirm('Permanently delete this payment report record? This cannot be undone.')) return;
   const c = paymentClaims.find(x => x.id === claimId);
   await fsDeletePaymentClaim(claimId);
@@ -1349,7 +1476,7 @@ function renderComplaints() {
       <td><span class="badge ${c.status === 'Resolved' ? 'resolved' : 'new'}">${c.status || 'New'}</span></td>
       <td class="row-actions">
         ${c.status !== 'Resolved' ? `<button class="btn small" onclick="resolveComplaint('${c.id}')">Mark Resolved</button>` : ''}
-        <button class="icon-btn" onclick="deleteComplaint('${c.id}')">🗑️</button>
+        ${isChief() ? `<button class="icon-btn" onclick="deleteComplaint('${c.id}')">🗑️</button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -1371,7 +1498,7 @@ function renderActivities() {
       <td><span class="badge ${a.status === 'Done' ? 'done' : 'pending'}">${a.status}</span></td>
       <td class="row-actions">
         <button class="icon-btn" onclick="editActivity('${a.id}')">✏️</button>
-        <button class="icon-btn" onclick="deleteActivity('${a.id}')">🗑️</button>
+        ${isChief() ? `<button class="icon-btn" onclick="deleteActivity('${a.id}')">🗑️</button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -1427,7 +1554,22 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+document.getElementById('add-admin-btn').addEventListener('click', async () => {
+  if (!requireChief()) return;
+  const input = document.getElementById('new-admin-name');
+  const name = input.value.trim().replace(/\s+/g, ' ');
+  if (!name) { alert('Please type the new admin\'s name.'); return; }
+  if (name.length > 60) { alert('That name is too long.'); return; }
+  if (adminNames.some(n => n.toLowerCase() === name.toLowerCase())) { alert('That name is already on the list.'); return; }
+  adminNames.push(name);
+  try { await saveAdminList(); } catch (e) { alert('Save failed: ' + e.message); await loadAdminList(); return; }
+  input.value = '';
+  populateAdminSelects(); renderAdminsView();
+  auditLog('Added admin ' + name);
+});
+
 document.getElementById('save-payment-settings-btn').addEventListener('click', async () => {
+  if (!requireChief()) return;
   const btn = document.getElementById('save-payment-settings-btn');
   const data = {
     momo1Provider: document.getElementById('settings-momo1-provider').value,
@@ -1548,13 +1690,11 @@ document.getElementById('notif-btn').addEventListener('click', () => {
 updateNotifBtnLabel();
 
 // ---- Role gate with admin password ----
-let currentAdminName = '';
-let pendingAdminName = '';
-
 document.getElementById('gate-admin').addEventListener('click', () => {
   document.getElementById('gate-buttons').style.display = 'none';
   document.getElementById('gate-name-form').style.display = 'block';
   document.getElementById('gate-admin-name').value = '';
+  loadAdminList();
 });
 document.getElementById('gate-name-cancel').addEventListener('click', () => {
   document.getElementById('gate-name-form').style.display = 'none';
@@ -1573,14 +1713,16 @@ document.getElementById('gate-password-cancel').addEventListener('click', () => 
   document.getElementById('gate-password-form').style.display = 'none';
   document.getElementById('gate-name-form').style.display = 'block';
 });
-document.getElementById('gate-password-submit').addEventListener('click', () => {
+document.getElementById('gate-password-submit').addEventListener('click', async () => {
   const val = document.getElementById('gate-password-input').value;
-  if (val === ADMIN_PASSWORD) {
+  if (await verifyAdminPassword(pendingAdminName, val)) {
     currentAdminName = pendingAdminName;
-    document.getElementById('admin-session-label').textContent = 'Logged in as: ' + currentAdminName;
+    applyRolePermissions();
     document.getElementById('role-gate').style.display = 'none';
     document.getElementById('app-shell').style.display = 'block';
+    activateView('overview');
     loadData();
+    loadAdminList();
     auditLog('Logged in');
   } else {
     document.getElementById('gate-error').style.display = 'block';
@@ -1613,7 +1755,7 @@ document.getElementById('tenant-back-top').addEventListener('click', goBackToGat
 document.getElementById('admin-back').addEventListener('click', () => {
   if (currentAdminName) auditLog('Logged out');
   currentAdminName = '';
-  document.getElementById('admin-session-label').textContent = '';
+  applyRolePermissions();
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('gate-buttons').style.display = 'block';
   document.getElementById('gate-name-form').style.display = 'none';
@@ -1643,6 +1785,7 @@ document.getElementById('restore-btn').addEventListener('click', () => {
   document.getElementById('restore-file-input').click();
 });
 document.getElementById('restore-file-input').addEventListener('change', (e) => {
+  if (!requireChief()) { e.target.value = ''; return; }
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -1953,6 +2096,7 @@ window.editTenant = function(id) {
 };
 
 window.deleteTenant = async function(id) {
+  if (!requireChief()) return;
   if (!confirm('Delete this tenant? Their ledger history will remain but be unlinked.')) return;
   const t = tenants.find(x => x.id === id);
   tenants = tenants.filter(x => x.id !== id);
@@ -2038,7 +2182,7 @@ window.editLedgerPayment = function(ledgerId) {
   document.getElementById('payment-tenant').value = l.tenantId;
   document.getElementById('payment-date').value = l.date;
   document.getElementById('payment-amount').value = l.amount;
-  document.getElementById('payment-receivedby').value = l.receivedBy || 'SSERUMPANISE MICHEAL';
+  setSelectValue('payment-receivedby', l.receivedBy || CHIEF_ADMIN);
   document.getElementById('payment-paidby').value = l.paidBy || 'Cash';
   document.getElementById('payment-note').value = l.note || '';
   updatePaymentSaveState();
@@ -2099,6 +2243,7 @@ window.addExtraCharge = async function(tenantId) {
 };
 
 window.deleteLedgerEntry = async function(id) {
+  if (!requireChief()) return;
   if (!confirm('Delete this ledger entry?')) return;
   ledger = ledger.filter(x => x.id !== id);
   renderAll();
@@ -2176,6 +2321,7 @@ window.resolveComplaint = async function(id) {
   auditLog(`Marked complaint from ${c.name} as resolved`, c.area);
 };
 window.deleteComplaint = async function(id) {
+  if (!requireChief()) return;
   if (!confirm('Delete this complaint?')) return;
   const c = complaints.find(x => x.id === id);
   complaints = complaints.filter(x => x.id !== id);
@@ -2212,12 +2358,13 @@ window.editActivity = function(id) {
   document.getElementById('activity-unit').value = a.unit || '';
   document.getElementById('activity-type').value = a.type;
   document.getElementById('activity-details').value = a.details;
-  document.getElementById('activity-enteredby').value = a.enteredBy || 'SSERUMPANISE MICHEAL';
+  setSelectValue('activity-enteredby', a.enteredBy || CHIEF_ADMIN);
   document.getElementById('activity-status').value = a.status;
   activityModalBg.classList.add('active');
 };
 
 window.deleteActivity = async function(id) {
+  if (!requireChief()) return;
   activities = activities.filter(x => x.id !== id);
   renderAll();
   await fsDeleteActivity(id);
