@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Namuyimba">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>NAMUYIMBA and SONS Property Dashboard</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#234f3a">
@@ -13,6 +18,15 @@
     --danger: #b1443b; --warn: #c98a3b; --ok: #2f6b4f;
   }
   * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { -webkit-tap-highlight-color: transparent; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  header { padding-top: max(16px, env(safe-area-inset-top)); }
+  /* iPhones zoom the whole page when a field under 16px is tapped — keep fields at 16px on touch screens */
+  @media (pointer: coarse) { input, select, textarea { font-size: 16px; } }
+  input, select, textarea, button { -webkit-appearance: none; appearance: none; }
+  select { background-image: linear-gradient(45deg, transparent 50%, #6b7a72 50%), linear-gradient(135deg, #6b7a72 50%, transparent 50%); background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+  input[type=date] { min-height: 38px; }
+  input[type=checkbox], input[type=radio] { -webkit-appearance: auto; appearance: auto; width: auto; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
   header { background: var(--primary-dark); color: white; padding: 16px 20px; }
   header h1 { margin: 0; font-size: 1.25rem; }
@@ -112,7 +126,20 @@
       <button class="btn" id="gate-admin">I'm Property Staff / Admin</button>
       <button class="btn secondary" id="gate-tenant">I'm a Tenant</button>
       <p style="font-size:0.72rem; margin-top:14px;">Tenants can view payment details, report a payment, or submit a complaint here — staff data isn't shown.</p>
-      <button class="btn" id="install-app-btn" style="display:none; background:var(--accent);">📲 Install this app on your phone</button>
+      <button class="btn" id="install-app-btn" style="background:var(--accent);">📲 Install this app</button>
+    </div>
+    <div id="gate-name-form" style="display:none;">
+      <label style="text-align:left;">Who's logging in?</label>
+      <select id="gate-admin-name">
+        <option value="">— Select your name —</option>
+        <option>Salongo Namuyimba Paul</option>
+        <option>Nalongo Namuyimba Sylvia</option>
+        <option>SSERUMPANISE MICHEAL</option>
+        <option>Ssekiranda Moses</option>
+        <option>Ssebuufu Henry</option>
+      </select>
+      <button class="btn" id="gate-name-continue">Continue</button>
+      <button class="btn secondary" id="gate-name-cancel">Cancel</button>
     </div>
     <div id="gate-password-form" style="display:none;">
       <label style="text-align:left;">Enter admin password</label>
@@ -121,6 +148,14 @@
       <button class="btn" id="gate-password-submit">Enter</button>
       <button class="btn secondary" id="gate-password-cancel">Cancel</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="install-help-bg">
+  <div class="modal">
+    <h3>Install this app</h3>
+    <div id="install-help-body" style="font-size:0.9rem; line-height:1.5;"></div>
+    <div class="modal-actions"><button class="btn" id="install-help-close">Got it</button></div>
   </div>
 </div>
 
@@ -217,8 +252,9 @@
 <div id="app-shell">
 <header>
   <h1>🏠 NAMUYIMBA and SONS</h1>
-  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> &nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></p>
+  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> &nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
   <input type="file" id="restore-file-input" accept="application/json" style="display:none;">
+  <p id="admin-session-label" style="font-size:0.75rem; color:var(--muted); margin-top:4px;"></p>
 </header>
 
 <nav>
@@ -238,6 +274,10 @@
     <div class="chart-box"><canvas id="chart-monthly-trend"></canvas></div>
     <div class="section-title">Collected by Area (This Month)</div>
     <div class="chart-box"><canvas id="chart-area-compare"></canvas></div>
+    <div class="section-title">Tenants by Status</div>
+    <div class="chart-box"><canvas id="chart-tenant-status"></canvas></div>
+    <div class="section-title">This Month's Collections vs Outstanding Balance</div>
+    <div class="chart-box"><canvas id="chart-collected-vs-owed"></canvas></div>
     <div class="section-title">By Area</div>
     <div class="area-cards" id="area-cards"></div>
     <div class="section-title">Recent Payments</div>
@@ -330,18 +370,31 @@
     <div class="section-title" style="margin-top:0;">Payment Details Shown to Tenants</div>
     <p style="font-size:0.82rem; color:var(--muted); margin-top:-4px;">Fill in whichever methods you accept. Leave a section blank to hide it from tenants. These are the details tenants see on the "How to Pay" page, and where they'll send Mobile Money or bank payments.</p>
 
-    <div class="section-title" style="font-size:0.95rem;">📱 Mobile Money</div>
+    <div class="section-title" style="font-size:0.95rem;">📱 Mobile Money — Option 1</div>
     <label>Provider</label>
-    <select id="settings-momo-provider">
+    <select id="settings-momo1-provider">
       <option value="">— Select —</option>
       <option value="MTN Mobile Money">MTN Mobile Money</option>
       <option value="Airtel Money">Airtel Money</option>
       <option value="Other">Other</option>
     </select>
     <label>Mobile Money Number</label>
-    <input id="settings-momo-number" placeholder="e.g. 077XXXXXXX">
+    <input id="settings-momo1-number" placeholder="e.g. 077XXXXXXX">
     <label>Registered Name on the Mobile Money Account</label>
-    <input id="settings-momo-name" placeholder="e.g. Sserumpanise Micheal">
+    <input id="settings-momo1-name" placeholder="e.g. Sserumpanise Micheal">
+
+    <div class="section-title" style="font-size:0.95rem;">📱 Mobile Money — Option 2</div>
+    <label>Provider</label>
+    <select id="settings-momo2-provider">
+      <option value="">— Select —</option>
+      <option value="MTN Mobile Money">MTN Mobile Money</option>
+      <option value="Airtel Money">Airtel Money</option>
+      <option value="Other">Other</option>
+    </select>
+    <label>Mobile Money Number</label>
+    <input id="settings-momo2-number" placeholder="e.g. 070XXXXXXX">
+    <label>Registered Name on the Mobile Money Account</label>
+    <input id="settings-momo2-name" placeholder="e.g. Nalongo Namuyimba Sylvia">
 
     <div class="section-title" style="font-size:0.95rem;">🏦 Bank Account</div>
     <label>Bank Name</label>
@@ -465,6 +518,7 @@
       <option>Inspection</option>
       <option>Move-in</option>
       <option>Move-out</option>
+      <option>Admin Action</option>
       <option>Other</option>
     </select>
     <label>Details</label>
@@ -511,7 +565,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-try { db.enablePersistence({ synchronizeTabs: true }); } catch (e) { /* fine if unsupported */ }
+try { db.enablePersistence({ synchronizeTabs: true }).catch(() => { /* Safari private mode / unsupported browsers: app still works online */ }); } catch (e) { /* fine if unsupported */ }
 
 // Silent, invisible sign-in (no login screen) — this only exists so Firestore's
 // security rules can require "must be signed in" for reads/writes, which keeps
@@ -536,16 +590,43 @@ function startRealtimeSync() {
     renderAll();
   }, err => { banner.textContent = 'Connection issue: ' + err.message; });
   db.collection('complaints').onSnapshot(snap => {
+    const fresh = [];
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'added') {
+        if (complaintsLoaded && !seenComplaintIds.has(ch.doc.id)) fresh.push(ch.doc.data());
+        seenComplaintIds.add(ch.doc.id);
+      }
+    });
     complaints = snap.docs.map(d => d.data());
+    complaintsLoaded = true;
     renderAll();
+    fresh.forEach(c => notify('New complaint/request', `${c.name || 'A tenant'} (${c.area || ''}) — ${(c.message||'').slice(0,60)}`));
   }, err => { banner.textContent = 'Connection issue: ' + err.message; });
   db.collection('activities').onSnapshot(snap => {
+    const fresh = [];
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'added') {
+        if (activitiesLoaded && !seenActivityIds.has(ch.doc.id)) fresh.push(ch.doc.data());
+        seenActivityIds.add(ch.doc.id);
+      }
+    });
     activities = snap.docs.map(d => d.data());
+    activitiesLoaded = true;
     renderAll();
+    fresh.forEach(a => notify('New activity logged', `${a.type || 'Activity'} — ${(a.details||'').slice(0,60)}`));
   }, err => { banner.textContent = 'Connection issue: ' + err.message; });
   db.collection('paymentClaims').onSnapshot(snap => {
+    const fresh = [];
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'added') {
+        if (claimsLoaded && !seenClaimIds.has(ch.doc.id)) fresh.push(ch.doc.data());
+        seenClaimIds.add(ch.doc.id);
+      }
+    });
     paymentClaims = snap.docs.map(d => d.data());
+    claimsLoaded = true;
     renderAll();
+    fresh.forEach(c => notify('New payment reported', `${c.name || 'A tenant'} reported ${fmt(c.amount)} via ${c.method}`));
   }, err => { banner.textContent = 'Connection issue: ' + err.message; });
 }
 
@@ -558,6 +639,7 @@ async function fsDeleteComplaint(id) { try { await db.collection('complaints').d
 async function fsSetActivity(a) { try { await db.collection('activities').doc(a.id).set(a); } catch(e){ alert('Save failed: ' + e.message); } }
 async function fsDeleteActivity(id) { try { await db.collection('activities').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
 async function fsSetPaymentClaim(c) { try { await db.collection('paymentClaims').doc(c.id).set(c); } catch(e){ alert('Save failed: ' + e.message); } }
+async function fsDeletePaymentClaim(id) { try { await db.collection('paymentClaims').doc(id).delete(); } catch(e){ alert('Delete failed: ' + e.message); } }
 // Tenant-side, one-time (not real-time) read of the admin-set payment details — this is the
 // only collection the tenant page ever reads, so tenants never see rent/ledger/other-tenant data.
 async function fsGetPaymentInfo() {
@@ -566,15 +648,29 @@ async function fsGetPaymentInfo() {
 }
 async function fsSetPaymentInfo(data) { await db.collection('meta').doc('paymentInfo').set(data, { merge: true }); }
 
+// Writes a system entry into the Activity Log recording which logged-in admin did what.
+// Silently no-ops if there's no active admin session (shouldn't normally happen) or if the
+// write fails — an audit-log hiccup should never block the actual action it's describing.
+async function auditLog(action, area) {
+  if (!currentAdminName) return;
+  const id = uid();
+  const entry = { id, date: todayStr(), area: area || '', unit: '', type: 'Admin Action', details: action, enteredBy: currentAdminName, status: 'Done' };
+  try { await db.collection('activities').doc(id).set(entry); } catch (e) { /* non-critical */ }
+}
+
 async function loadSettingsForm() {
   let info = {};
   try {
     const doc = await db.collection('meta').doc('paymentInfo').get();
     info = doc.exists ? doc.data() : {};
   } catch (e) { /* leave form blank if this fails */ }
-  document.getElementById('settings-momo-provider').value = info.momoProvider || '';
-  document.getElementById('settings-momo-number').value = info.momoNumber || '';
-  document.getElementById('settings-momo-name').value = info.momoName || '';
+  // momo1* falls back to the old single-provider fields, from before Option 2 existed.
+  document.getElementById('settings-momo1-provider').value = info.momo1Provider || info.momoProvider || '';
+  document.getElementById('settings-momo1-number').value = info.momo1Number || info.momoNumber || '';
+  document.getElementById('settings-momo1-name').value = info.momo1Name || info.momoName || '';
+  document.getElementById('settings-momo2-provider').value = info.momo2Provider || '';
+  document.getElementById('settings-momo2-number').value = info.momo2Number || '';
+  document.getElementById('settings-momo2-name').value = info.momo2Name || '';
   document.getElementById('settings-bank-name').value = info.bankName || '';
   document.getElementById('settings-bank-account-name').value = info.bankAccountName || '';
   document.getElementById('settings-bank-account-number').value = info.bankAccountNumber || '';
@@ -609,6 +705,8 @@ let activities = [];
 let paymentClaims = [];
 let receiptCounter = 0;
 let confirmingClaimId = null; // set while the payment modal is prefilled from a tenant's payment claim
+let complaintsLoaded = false, activitiesLoaded = false, claimsLoaded = false;
+let seenComplaintIds = new Set(), seenActivityIds = new Set(), seenClaimIds = new Set();
 
 const banner = document.getElementById('status-banner');
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -969,6 +1067,62 @@ function fmtShort(n) {
   if (Math.abs(n) >= 1e3) return Math.round(n / 1e3) + 'k';
   return String(Math.round(n));
 }
+function fmtPct(v, total) { return total > 0 ? Math.round((v / total) * 100) + '%' : '0%'; }
+
+// Draws a simple pie chart (arc segments) with a color-key legend, sized to the
+// canvas's own current on-screen width/height — same pattern as drawBarChart.
+function drawPieChart(canvasId, labels, values, colors) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const cssWidth = canvas.clientWidth || 300;
+  const cssHeight = canvas.clientHeight || 220;
+  if (cssWidth === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+  const total = values.reduce((a, b) => a + Number(b || 0), 0);
+  const leftW = Math.min(cssWidth * 0.46, cssHeight);
+  const cx = leftW / 2 + 6;
+  const cy = cssHeight / 2;
+  const r = Math.max(Math.min(cx - 10, cy - 10), 10);
+
+  if (total <= 0) {
+    ctx.fillStyle = '#6b7a72';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data yet', cssWidth / 2, cssHeight / 2);
+    return;
+  }
+
+  let startAngle = -Math.PI / 2;
+  values.forEach((v, i) => {
+    const slice = (Number(v || 0) / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, startAngle, startAngle + slice);
+    ctx.closePath();
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    startAngle += slice;
+  });
+
+  const legendX = leftW + 16;
+  let legendY = cssHeight / 2 - (labels.length * 20) / 2 + 8;
+  labels.forEach((label, i) => {
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fillRect(legendX, legendY - 9, 12, 12);
+    ctx.fillStyle = '#23302a';
+    ctx.font = '11px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${label}: ${fmtShort(values[i])} (${fmtPct(values[i], total)})`, legendX + 18, legendY + 1);
+    legendY += 20;
+  });
+}
+
 function getLastNMonthsCollected(n) {
   const now = new Date();
   const labels = [], values = [];
@@ -991,12 +1145,14 @@ function areaCollected(areaName, monthKey) {
 
 function renderOverview() {
   const activeTenants = tenants.filter(t => t.status === 'Active').length;
+  const vacatedTenants = tenants.length - activeTenants;
   const totalCollected = ledger.filter(l => l.type === 'Payment').reduce((s,l) => s + Number(l.amount), 0);
   const mKey = currentMonthKey();
   const thisMonthCollected = ledger.filter(l => l.type === 'Payment' && l.date && l.date.slice(0,7) === mKey)
     .reduce((s,l) => s + Number(l.amount), 0);
   const totalOwed = tenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
   const newComplaints = complaints.filter(c => c.status !== 'Resolved').length;
+  const pendingClaims = paymentClaims.filter(c => c.status === 'Pending').length;
 
   let bestArea = null, bestAmount = -1;
   AREAS.forEach(a => {
@@ -1010,6 +1166,7 @@ function renderOverview() {
     <div class="card" onclick="activateView('monthly')"><div class="num">${fmt(thisMonthCollected)}</div><div class="label">Collected This Month</div></div>
     <div class="card owed" onclick="activateView('tenants')"><div class="num">${fmt(totalOwed)}</div><div class="label">Total Owed (Balances)</div></div>
     <div class="card" onclick="activateView('complaints')"><div class="num">${newComplaints}</div><div class="label">Open Complaints</div></div>
+    <div class="card${pendingClaims ? ' owed' : ''}" onclick="activateView('payments')"><div class="num">${pendingClaims}</div><div class="label">Payment Reports from Tenants</div></div>
     <div class="card top"><div class="num">${bestAmount > 0 ? escapeHtml(bestArea) : '—'}</div><div class="label">Top Area This Month${bestAmount > 0 ? ' (' + fmt(bestAmount) + ')' : ''}</div></div>
   `;
 
@@ -1037,6 +1194,8 @@ function renderOverview() {
   const trend = getLastNMonthsCollected(6);
   drawBarChart('chart-monthly-trend', trend.labels, trend.values, { color: '#2f6b4f' });
   drawBarChart('chart-area-compare', AREAS.map(a => a.name.split(' ')[0]), AREAS.map(a => areaCollected(a.name, mKey)), { color: '#c98a3b' });
+  drawPieChart('chart-tenant-status', ['Active', 'Vacated'], [activeTenants, vacatedTenants], ['#2f6b4f', '#c98a3b']);
+  drawPieChart('chart-collected-vs-owed', ['Collected This Month', 'Outstanding Balance'], [thisMonthCollected, totalOwed], ['#2f6b4f', '#c94b3b']);
 }
 
 function renderMonthly() {
@@ -1129,7 +1288,7 @@ function renderPaymentClaims() {
     const actions = c.status === 'Pending'
       ? `<button class="btn small" onclick="confirmPaymentClaim('${c.id}')">✅ Confirm</button>
          <button class="btn small danger" onclick="rejectPaymentClaim('${c.id}')">✖ Reject</button>`
-      : '';
+      : `<button class="btn small danger" onclick="deletePaymentClaim('${c.id}')">🗑️ Delete</button>`;
     return `<tr>
       <td>${c.date || ''}</td>
       <td>${escapeHtml(c.area || '')}${c.unit ? ' / ' + escapeHtml(c.unit) : ''}</td>
@@ -1164,6 +1323,14 @@ window.rejectPaymentClaim = async function(claimId) {
   if (!c) return;
   if (!confirm('Mark this tenant-reported payment as rejected/not received? This does not delete their report.')) return;
   await fsSetPaymentClaim({ ...c, status: 'Rejected' });
+  auditLog(`Rejected tenant-reported payment of ${fmt(c.amount)} from ${c.name}`, c.area);
+};
+
+window.deletePaymentClaim = async function(claimId) {
+  if (!confirm('Permanently delete this payment report record? This cannot be undone.')) return;
+  const c = paymentClaims.find(x => x.id === claimId);
+  await fsDeletePaymentClaim(claimId);
+  if (c) auditLog(`Deleted a ${(c.status||'').toLowerCase()} payment report from ${c.name}`, c.area);
 };
 
 function renderComplaints() {
@@ -1263,9 +1430,12 @@ window.addEventListener('resize', () => {
 document.getElementById('save-payment-settings-btn').addEventListener('click', async () => {
   const btn = document.getElementById('save-payment-settings-btn');
   const data = {
-    momoProvider: document.getElementById('settings-momo-provider').value,
-    momoNumber: document.getElementById('settings-momo-number').value.trim(),
-    momoName: document.getElementById('settings-momo-name').value.trim(),
+    momo1Provider: document.getElementById('settings-momo1-provider').value,
+    momo1Number: document.getElementById('settings-momo1-number').value.trim(),
+    momo1Name: document.getElementById('settings-momo1-name').value.trim(),
+    momo2Provider: document.getElementById('settings-momo2-provider').value,
+    momo2Number: document.getElementById('settings-momo2-number').value.trim(),
+    momo2Name: document.getElementById('settings-momo2-name').value.trim(),
     bankName: document.getElementById('settings-bank-name').value.trim(),
     bankAccountName: document.getElementById('settings-bank-account-name').value.trim(),
     bankAccountNumber: document.getElementById('settings-bank-account-number').value.trim()
@@ -1274,6 +1444,7 @@ document.getElementById('save-payment-settings-btn').addEventListener('click', a
   try {
     await fsSetPaymentInfo(data);
     btn.textContent = '✅ Saved';
+    auditLog('Updated payment settings (Mobile Money / Bank details)');
   } catch (e) {
     alert('Save failed: ' + e.message);
     btn.textContent = 'Save Payment Settings';
@@ -1285,22 +1456,48 @@ document.getElementById('save-payment-settings-btn').addEventListener('click', a
 // This makes the site installable to a phone's home screen (opens full-screen,
 // works with a cached shell when offline). It is not a downloadable .apk file.
 let deferredInstallPrompt = null;
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_STANDALONE = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredInstallPrompt = e;
-  const btn = document.getElementById('install-app-btn');
-  if (btn) btn.style.display = 'block';
 });
 const installBtn = document.getElementById('install-app-btn');
+function installHelpHtml() {
+  if (IS_IOS) {
+    return `<p><b>On iPhone / iPad:</b></p>
+      <ol style="padding-left:20px;">
+        <li>Open this page in <b>Safari</b> (if you're inside WhatsApp, Facebook or another app, tap the <b>⋯</b> or share icon and choose <b>Open in Safari</b>).</li>
+        <li>Tap the <b>Share</b> button (square with an arrow pointing up).</li>
+        <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+        <li>Tap <b>Add</b>. The app icon now appears on your home screen.</li>
+      </ol>`;
+  }
+  const ua = navigator.userAgent;
+  if (/Android/.test(ua)) {
+    return `<p><b>On Android:</b> open the browser menu (<b>⋮</b>) and tap <b>Install app</b> or <b>Add to Home screen</b>. (Use Chrome for the best result.)</p>`;
+  }
+  return `<p><b>On a computer:</b></p>
+    <ul style="padding-left:20px;">
+      <li><b>Chrome / Edge:</b> click the install icon at the right end of the address bar, or the menu → <b>Install app</b>.</li>
+      <li><b>Safari (Mac):</b> File → <b>Add to Dock</b>.</li>
+      <li><b>Firefox:</b> works fine in the browser — just bookmark this page.</li>
+    </ul>`;
+}
 if (installBtn) {
+  if (IS_STANDALONE) installBtn.style.display = 'none';
   installBtn.addEventListener('click', async () => {
-    if (!deferredInstallPrompt) return;
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-    installBtn.style.display = 'none';
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      return;
+    }
+    document.getElementById('install-help-body').innerHTML = installHelpHtml();
+    document.getElementById('install-help-bg').classList.add('active');
   });
 }
+document.getElementById('install-help-close').addEventListener('click', () => document.getElementById('install-help-bg').classList.remove('active'));
 window.addEventListener('appinstalled', () => {
   if (installBtn) installBtn.style.display = 'none';
 });
@@ -1310,23 +1507,81 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   });
 }
 
+// ---- In-app notifications ----
+// Shows a phone notification-bar alert for new complaints, payment reports, and activity
+// log entries WHILE this app is open (foreground or a recently backgrounded tab) on this
+// device. This is not the same as true push notifications, which would still work with the
+// app fully closed — that needs a server component (Firebase Cloud Messaging + a Cloud
+// Function) that isn't part of this static site, so it isn't included here.
+function notify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, { body, icon: 'icon-192.png' })).catch(() => {
+      try { new Notification(title, { body, icon: 'icon-192.png' }); } catch (e) {}
+    });
+  } else {
+    try { new Notification(title, { body, icon: 'icon-192.png' }); } catch (e) {}
+  }
+}
+function updateNotifBtnLabel() {
+  const btn = document.getElementById('notif-btn');
+  if (!btn) return;
+  if (!('Notification' in window)) {
+    // iPhones only allow notifications for apps added to the Home Screen (iOS 16.4 or newer)
+    btn.textContent = (IS_IOS && !IS_STANDALONE) ? '🔔 notifications: add to Home Screen first' : '🔕 notifications not supported';
+    return;
+  }
+  if (Notification.permission === 'granted') btn.textContent = '🔔 notifications on';
+  else if (Notification.permission === 'denied') btn.textContent = '🔕 notifications blocked (check browser settings)';
+  else btn.textContent = '🔔 enable notifications';
+}
+document.getElementById('notif-btn').addEventListener('click', () => {
+  if (!('Notification' in window)) {
+    if (IS_IOS && !IS_STANDALONE) alert('On iPhone, notifications only work once this app is added to your Home Screen (Share → Add to Home Screen, needs iOS 16.4 or newer). Open it from the Home Screen icon, then tap this again.');
+    else alert('Notifications are not supported in this browser.');
+    return;
+  }
+  if (Notification.permission === 'granted') { alert('Notifications are already on for this device.'); return; }
+  if (Notification.permission === 'denied') { alert('Notifications are blocked for this site — enable them from your browser\'s site settings.'); return; }
+  Notification.requestPermission().then(updateNotifBtnLabel);
+});
+updateNotifBtnLabel();
+
 // ---- Role gate with admin password ----
+let currentAdminName = '';
+let pendingAdminName = '';
+
 document.getElementById('gate-admin').addEventListener('click', () => {
   document.getElementById('gate-buttons').style.display = 'none';
+  document.getElementById('gate-name-form').style.display = 'block';
+  document.getElementById('gate-admin-name').value = '';
+});
+document.getElementById('gate-name-cancel').addEventListener('click', () => {
+  document.getElementById('gate-name-form').style.display = 'none';
+  document.getElementById('gate-buttons').style.display = 'block';
+});
+document.getElementById('gate-name-continue').addEventListener('click', () => {
+  const name = document.getElementById('gate-admin-name').value;
+  if (!name) { alert('Please select your name to continue.'); return; }
+  pendingAdminName = name;
+  document.getElementById('gate-name-form').style.display = 'none';
   document.getElementById('gate-password-form').style.display = 'block';
   document.getElementById('gate-password-input').value = '';
   document.getElementById('gate-error').style.display = 'none';
 });
 document.getElementById('gate-password-cancel').addEventListener('click', () => {
   document.getElementById('gate-password-form').style.display = 'none';
-  document.getElementById('gate-buttons').style.display = 'block';
+  document.getElementById('gate-name-form').style.display = 'block';
 });
 document.getElementById('gate-password-submit').addEventListener('click', () => {
   const val = document.getElementById('gate-password-input').value;
   if (val === ADMIN_PASSWORD) {
+    currentAdminName = pendingAdminName;
+    document.getElementById('admin-session-label').textContent = 'Logged in as: ' + currentAdminName;
     document.getElementById('role-gate').style.display = 'none';
     document.getElementById('app-shell').style.display = 'block';
     loadData();
+    auditLog('Logged in');
   } else {
     document.getElementById('gate-error').style.display = 'block';
   }
@@ -1341,6 +1596,7 @@ function goBackToGate() {
   document.getElementById('tenant-payclaim-wrap').style.display = 'block';
   document.getElementById('pc-confirm').style.display = 'none';
   document.getElementById('gate-buttons').style.display = 'block';
+  document.getElementById('gate-name-form').style.display = 'none';
   document.getElementById('gate-password-form').style.display = 'none';
   document.getElementById('role-gate').style.display = 'flex';
 }
@@ -1355,8 +1611,12 @@ document.getElementById('gate-tenant').addEventListener('click', () => {
 document.getElementById('tenant-back').addEventListener('click', goBackToGate);
 document.getElementById('tenant-back-top').addEventListener('click', goBackToGate);
 document.getElementById('admin-back').addEventListener('click', () => {
+  if (currentAdminName) auditLog('Logged out');
+  currentAdminName = '';
+  document.getElementById('admin-session-label').textContent = '';
   document.getElementById('app-shell').style.display = 'none';
   document.getElementById('gate-buttons').style.display = 'block';
+  document.getElementById('gate-name-form').style.display = 'none';
   document.getElementById('gate-password-form').style.display = 'none';
   document.getElementById('role-gate').style.display = 'flex';
 });
@@ -1469,14 +1729,17 @@ document.getElementById('c-record-btn').addEventListener('click', async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     recordedChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+    // Chrome/Android records webm, iPhones (Safari) record mp4 — pick whichever this device supports
+    const preferredTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac'];
+    const chosenType = preferredTypes.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    mediaRecorder = chosenType ? new MediaRecorder(stream, { mimeType: chosenType }) : new MediaRecorder(stream);
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstop = () => {
       stream.getTracks().forEach(tr => tr.stop());
       clearInterval(recordingTimerInterval);
       document.getElementById('c-record-timer').textContent = '';
       btn.textContent = '🎤 Record voice note';
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm' });
       const reader = new FileReader();
       reader.onload = () => {
         voiceNoteDataUrl = reader.result;
@@ -1563,20 +1826,22 @@ async function loadTenantPayInfo() {
   const box = document.getElementById('tenant-pay-info');
   box.innerHTML = 'Loading payment details...';
   const info = await fsGetPaymentInfo();
-  if (!info || (!info.momoNumber && !info.bankAccountNumber)) {
+  const momo1Number = info && (info.momo1Number || info.momoNumber);
+  const momo2Number = info && info.momo2Number;
+  if (!info || (!momo1Number && !momo2Number && !info.bankAccountNumber)) {
     box.innerHTML = `<p style="font-size:0.85rem; color:var(--muted);">Payment details have not been set up yet — please contact property management directly to arrange payment.</p>`;
     return;
   }
   let html = '';
-  if (info.momoNumber) {
-    html += `
+  const momoBlock = (provider, number, name) => `
       <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px;">
-        <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">${escapeHtml(info.momoProvider || 'Mobile Money')}</div>
-        <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(info.momoNumber)}</div>
-        ${info.momoName ? `<div style="font-size:0.8rem; color:var(--muted);">Registered to: ${escapeHtml(info.momoName)}</div>` : ''}
-        <button class="btn small secondary" style="margin-top:8px;" onclick="copyToClipboard('${escapeHtml(info.momoNumber)}')">📋 Copy number</button>
+        <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">${escapeHtml(provider || 'Mobile Money')}</div>
+        <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(number)}</div>
+        ${name ? `<div style="font-size:0.8rem; color:var(--muted);">Registered to: ${escapeHtml(name)}</div>` : ''}
+        <button class="btn small secondary" style="margin-top:8px;" onclick="copyToClipboard('${escapeHtml(number)}')">📋 Copy number</button>
       </div>`;
-  }
+  if (momo1Number) html += momoBlock(info.momo1Provider || info.momoProvider, momo1Number, info.momo1Name || info.momoName);
+  if (momo2Number) html += momoBlock(info.momo2Provider, momo2Number, info.momo2Name);
   if (info.bankAccountNumber) {
     html += `
       <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px;">
@@ -1689,9 +1954,11 @@ window.editTenant = function(id) {
 
 window.deleteTenant = async function(id) {
   if (!confirm('Delete this tenant? Their ledger history will remain but be unlinked.')) return;
+  const t = tenants.find(x => x.id === id);
   tenants = tenants.filter(x => x.id !== id);
   renderAll();
   await fsDeleteTenant(id);
+  if (t) auditLog(`Deleted tenant ${t.name} — ${t.unit}`, t.area);
 };
 
 document.getElementById('tenant-save').addEventListener('click', async () => {
@@ -1737,6 +2004,7 @@ document.getElementById('tenant-save').addEventListener('click', async () => {
   await fsSetTenant(finalTenant);
   tenantModalBg.classList.remove('active');
   renderAll();
+  auditLog(`${id ? 'Edited' : 'Added'} tenant ${finalTenant.name} — ${finalTenant.unit}`, finalTenant.area);
 });
 
 
@@ -1751,7 +2019,7 @@ window.openPaymentModal = function(tenantId, prefill) {
   if (t) document.getElementById('payment-tenant').value = tenantId;
   document.getElementById('payment-date').value = todayStr();
   document.getElementById('payment-amount').value = (prefill && prefill.amount) || '';
-  document.getElementById('payment-receivedby').value = 'SSERUMPANISE MICHEAL';
+  document.getElementById('payment-receivedby').value = currentAdminName || 'SSERUMPANISE MICHEAL';
   document.getElementById('payment-paidby').value = (prefill && prefill.paidBy) || 'Cash';
   document.getElementById('payment-note').value = (prefill && prefill.note) || '';
   updatePaymentSaveState();
@@ -1804,10 +2072,14 @@ document.getElementById('payment-save').addEventListener('click', async () => {
   }
   renderAll();
   await fsSetLedger(finalEntry);
+  const tenantName = (tenants.find(x => x.id === tenantId) || {}).name || 'tenant';
   if (confirmingClaimId) {
     const c = paymentClaims.find(x => x.id === confirmingClaimId);
     if (c) await fsSetPaymentClaim({ ...c, status: 'Confirmed', ledgerId: finalEntry.id });
     confirmingClaimId = null;
+    auditLog(`Confirmed tenant-reported payment of ${fmt(amount)} for ${tenantName}`, areaId);
+  } else {
+    auditLog(`${editId ? 'Edited' : 'Recorded'} payment of ${fmt(amount)} for ${tenantName}`, areaId);
   }
   paymentModalBg.classList.remove('active');
 });
@@ -1901,12 +2173,15 @@ window.resolveComplaint = async function(id) {
   complaints[idx] = updated;
   renderAll();
   await fsSetComplaint(updated);
+  auditLog(`Marked complaint from ${c.name} as resolved`, c.area);
 };
 window.deleteComplaint = async function(id) {
   if (!confirm('Delete this complaint?')) return;
+  const c = complaints.find(x => x.id === id);
   complaints = complaints.filter(x => x.id !== id);
   renderAll();
   await fsDeleteComplaint(id);
+  if (c) auditLog(`Deleted complaint from ${c.name}`, c.area);
 };
 
 const activityModalBg = document.getElementById('activity-modal-bg');
@@ -1919,7 +2194,7 @@ document.getElementById('add-activity-btn').addEventListener('click', () => {
   document.getElementById('activity-unit').value = '';
   document.getElementById('activity-type').value = 'Maintenance';
   document.getElementById('activity-details').value = '';
-  document.getElementById('activity-enteredby').value = 'SSERUMPANISE MICHEAL';
+  document.getElementById('activity-enteredby').value = currentAdminName || 'SSERUMPANISE MICHEAL';
   document.getElementById('activity-status').value = 'Pending';
   activityModalBg.classList.add('active');
 });
