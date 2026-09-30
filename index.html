@@ -639,7 +639,9 @@ function startRealtimeSync() {
     activities = snap.docs.map(d => d.data());
     activitiesLoaded = true;
     renderAll();
-    fresh.forEach(a => notify('New activity logged', `${a.type || 'Activity'} — ${(a.details||'').slice(0,60)}`));
+    // Only the payment-related activity log entries notify — routine admin actions (edits, logins,
+    // settings changes) and manual entries like Maintenance/Repairs stay in the log but stay quiet.
+    fresh.filter(isPaymentRelatedActivity).forEach(a => notify('Payment activity', `${(a.details||'').slice(0,80)}`));
   }, err => { banner.textContent = 'Connection issue: ' + err.message; });
   db.collection('paymentClaims').onSnapshot(snap => {
     const fresh = [];
@@ -1726,6 +1728,14 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 // device. This is not the same as true push notifications, which would still work with the
 // app fully closed — that needs a server component (Firebase Cloud Messaging + a Cloud
 // Function) that isn't part of this static site, so it isn't included here.
+// True for activity log entries worth a phone notification — payment-related actions only.
+// Routine audit entries (logins, tenant edits, resolved complaints, settings changes) and
+// manual log types (Maintenance, Repairs, etc.) are still recorded in the Activity Log, they
+// just don't pop a notification.
+function isPaymentRelatedActivity(a) {
+  const text = `${a.type || ''} ${a.details || ''}`;
+  return /payment/i.test(text);
+}
 function notify(title, body) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   if (navigator.serviceWorker) {
