@@ -462,6 +462,7 @@
     <input id="tenant-movein" type="date">
     <label>Monthly rent (UGX)</label>
     <input id="tenant-rent" type="number" placeholder="e.g. 500000">
+    <p id="tenant-rent-note" style="font-size:0.75rem; color:var(--muted); margin-top:-6px;">Editing this field corrects a mistake — it fixes the rent for this tenant's whole current billing period, including past months already recorded. To raise or lower rent from a specific date going forward without touching past balances, use "💲 Change Rent" on the tenant's row instead.</p>
     <label>Opening balance owed (UGX, if any — for debt before this system started)</label>
     <input id="tenant-opening-balance" type="number" placeholder="0">
     <label>Status</label>
@@ -472,6 +473,25 @@
     <div class="modal-actions">
       <button class="btn secondary" id="tenant-cancel">Cancel</button>
       <button class="btn" id="tenant-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="change-rent-modal-bg">
+  <div class="modal">
+    <h3>Change Rent</h3>
+    <p style="font-size:0.82rem; color:var(--muted); margin-top:-6px;">For a genuine rent increase or decrease. This starts a new billing period from the date you choose — it never changes any month before that date.</p>
+    <input type="hidden" id="change-rent-tenant-id">
+    <p id="change-rent-tenant-label" style="font-weight:600; margin:10px 0 0;"></p>
+    <label>Current rent</label>
+    <p id="change-rent-current" style="margin-top:-6px; color:var(--muted);"></p>
+    <label>New monthly rent (UGX)</label>
+    <input id="change-rent-amount" type="number" placeholder="e.g. 550000">
+    <label>Effective from</label>
+    <input id="change-rent-date" type="date">
+    <div class="modal-actions">
+      <button class="btn secondary" id="change-rent-cancel">Cancel</button>
+      <button class="btn" id="change-rent-save">Save</button>
     </div>
   </div>
 </div>
@@ -1028,11 +1048,19 @@ function drawReceiptCanvas(data) {
   // Title
   ctx.font = 'bold 46px Arial';
   ctx.fillText('HOUSE RENT RECEIPT', 45, 80);
-  // simple house icon
+  // house icon — roof in accent orange, walls in cream with an outline, door in dark green
+  ctx.fillStyle = '#c98a3b';
   ctx.beginPath();
   ctx.moveTo(830, 40); ctx.lineTo(870, 15); ctx.lineTo(910, 40);
   ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#f4f6f5';
   ctx.fillRect(840, 40, 60, 35);
+  ctx.strokeStyle = '#2f6b4f'; ctx.lineWidth = 2;
+  ctx.strokeRect(840, 40, 60, 35);
+  ctx.fillStyle = '#2f6b4f';
+  ctx.fillRect(862, 58, 16, 17);
+  ctx.fillStyle = '#000000';
+  ctx.strokeStyle = '#000000';
 
   ctx.font = '26px Arial';
   ctx.fillText('Date:', 780, 130);
@@ -1044,17 +1072,18 @@ function drawReceiptCanvas(data) {
   ctx.fillText(String(data.no), 870, 170);
   ctx.beginPath(); ctx.moveTo(860, 176); ctx.lineTo(1150, 176); ctx.stroke();
 
-  ctx.fillText('Received from', 45, 190);
-  ctx.fillText(data.receivedFrom, 300, 190);
-  ctx.beginPath(); ctx.moveTo(290, 196); ctx.lineTo(700, 196); ctx.stroke();
+  // Extra vertical gap below "No." so it never visually runs into "The Sum of" on the next row
+  ctx.fillText('Received from', 45, 208);
+  ctx.fillText(data.receivedFrom, 300, 208);
+  ctx.beginPath(); ctx.moveTo(290, 214); ctx.lineTo(700, 214); ctx.stroke();
 
-  ctx.fillText('The Sum of', 730, 190);
+  ctx.fillText('The Sum of', 730, 208);
   ctx.beginPath(); ctx.moveTo(850, 176); ctx.lineTo(1150, 176); ctx.stroke();
 
   ctx.font = '22px Arial';
-  wrapText(ctx, data.sumWords, 45, 235, 700, 28);
-  ctx.beginPath(); ctx.moveTo(45, 246); ctx.lineTo(830, 246); ctx.stroke();
-  ctx.fillText('Shillings', 850, 236);
+  wrapText(ctx, data.sumWords, 45, 253, 700, 28);
+  ctx.beginPath(); ctx.moveTo(45, 264); ctx.lineTo(830, 264); ctx.stroke();
+  ctx.fillText('Shillings', 850, 254);
 
   ctx.font = '26px Arial';
   ctx.fillText('Paid by', 730, 290);
@@ -1153,6 +1182,23 @@ function tenantBalance(tenantId) {
   return sumOwed + extraCharges;
 }
 
+// Opens an external link (WhatsApp, etc.) via a real, user-visible link click rather than
+// window.open(). Once this app is installed to a phone's Home Screen (standalone display
+// mode), window.open() is frequently blocked or silently does nothing on Android — a normal
+// link tap is what reliably hands off to an installed app like WhatsApp.
+function openExternalLink(url) {
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) {
+    window.location.href = url;
+  }
+}
 function normalizePhone(num) {
   let n = (num || '').replace(/[^\d]/g, '');
   if (n.startsWith('0')) n = '256' + n.slice(1);
@@ -1414,12 +1460,13 @@ function renderTenants() {
       <td>${escapeHtml(t.unit)}</td>
       <td>${escapeHtml(t.name)}</td>
       <td>${escapeHtml(t.whatsapp || '—')}</td>
-      <td>${t.rent ? fmt(t.rent) : '—'}</td>
+      <td>${t.rent ? fmt(rentForDate(t, new Date())) : '—'}</td>
       <td><span class="badge ${bal > 0 ? 'owed' : 'clear'}">${fmt(bal)}</span></td>
       <td><span class="badge ${t.status === 'Active' ? 'active' : 'vacated'}">${t.status}</span></td>
       <td class="row-actions">
         <button class="btn small" onclick="openPaymentModal('${t.id}')">Payment</button>
         <button class="btn small secondary" onclick="addExtraCharge('${t.id}')">Add Charge</button>
+        <button class="btn small secondary" onclick="openChangeRentModal('${t.id}')">💲 Change Rent</button>
         <button class="icon-btn" onclick="editTenant('${t.id}')">✏️</button>
         ${isChief() ? `<button class="icon-btn" onclick="deleteTenant('${t.id}')">🗑️</button>` : ''}
       </td>
@@ -1728,12 +1775,14 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 // device. This is not the same as true push notifications, which would still work with the
 // app fully closed — that needs a server component (Firebase Cloud Messaging + a Cloud
 // Function) that isn't part of this static site, so it isn't included here.
-// True for activity log entries worth a phone notification — payment-related actions only.
-// Routine audit entries (logins, tenant edits, resolved complaints, settings changes) and
-// manual log types (Maintenance, Repairs, etc.) are still recorded in the Activity Log, they
-// just don't pop a notification.
+// True for activity log entries worth a phone notification — payment-related actions only,
+// and never a deletion of any kind (deleting something is routine record-keeping, not news).
+// Routine admin actions (edits, logins, settings changes) and manual log types
+// (Maintenance, Repairs, etc.) are still recorded in the Activity Log, they just stay quiet.
 function isPaymentRelatedActivity(a) {
-  const text = `${a.type || ''} ${a.details || ''}`;
+  const details = a.details || '';
+  if (/^Deleted/i.test(details.trim())) return false;
+  const text = `${a.type || ''} ${details}`;
   return /payment/i.test(text);
 }
 function notify(title, body) {
@@ -2158,6 +2207,7 @@ document.getElementById('add-tenant-btn').addEventListener('click', () => {
   document.getElementById('tenant-rent').value = '';
   document.getElementById('tenant-opening-balance').value = '';
   document.getElementById('tenant-status').value = 'Active';
+  document.getElementById('tenant-rent-note').style.display = 'none';
   updateTenantSaveState();
   tenantModalBg.classList.add('active');
 });
@@ -2177,6 +2227,7 @@ window.editTenant = function(id) {
   document.getElementById('tenant-rent').value = t.rent || '';
   document.getElementById('tenant-opening-balance').value = '';
   document.getElementById('tenant-status').value = t.status;
+  document.getElementById('tenant-rent-note').style.display = 'block';
   updateTenantSaveState();
   tenantModalBg.classList.add('active');
 };
@@ -2213,12 +2264,19 @@ document.getElementById('tenant-save').addEventListener('click', async () => {
   if (id) {
     const idx = tenants.findIndex(x => x.id === id);
     const existing = tenants[idx];
-    const history = Array.isArray(existing.rentHistory) ? existing.rentHistory.slice() : [{ date: existing.moveIn || moveIn, rent: Number(existing.rent || 0) }];
-    // Rent changes apply from today forward only — past months keep the rent that was in effect at the time.
+    const history = Array.isArray(existing.rentHistory) && existing.rentHistory.length
+      ? existing.rentHistory.slice() : [{ date: existing.moveIn || moveIn, rent: Number(existing.rent || 0) }];
+    // This field is for CORRECTING a mistake, so it rewrites whichever rent period is
+    // currently active — affecting past balances computed under that period — rather than
+    // starting a new period. A genuine rent increase/decrease from a specific date forward
+    // uses the separate "Change Rent" action instead, which never touches this history.
     if (Number(existing.rent || 0) !== newRent) {
-      history.push({ date: todayStr(), rent: newRent });
+      const sorted = history.slice().sort((a,b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+      sorted[sorted.length - 1].rent = newRent;
+      finalTenant = { ...existing, ...data, rentHistory: sorted };
+    } else {
+      finalTenant = { ...existing, ...data, rentHistory: history };
     }
-    finalTenant = { ...existing, ...data, rentHistory: history };
     tenants[idx] = finalTenant;
   } else {
     tenantId = uid();
@@ -2235,6 +2293,46 @@ document.getElementById('tenant-save').addEventListener('click', async () => {
   tenantModalBg.classList.remove('active');
   renderAll();
   auditLog(`${id ? 'Edited' : 'Added'} tenant ${finalTenant.name} — ${finalTenant.unit}`, finalTenant.area);
+});
+
+const changeRentModalBg = document.getElementById('change-rent-modal-bg');
+window.openChangeRentModal = function(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t) return;
+  document.getElementById('change-rent-tenant-id').value = tenantId;
+  document.getElementById('change-rent-tenant-label').textContent = `${t.name} — ${t.unit} (${t.area})`;
+  document.getElementById('change-rent-current').textContent = 'Currently ' + fmt(rentForDate(t, new Date())) + ' per month';
+  document.getElementById('change-rent-amount').value = '';
+  document.getElementById('change-rent-date').value = todayStr();
+  if (t.moveIn) document.getElementById('change-rent-date').min = t.moveIn;
+  changeRentModalBg.classList.add('active');
+};
+document.getElementById('change-rent-cancel').addEventListener('click', () => changeRentModalBg.classList.remove('active'));
+document.getElementById('change-rent-save').addEventListener('click', async () => {
+  const tenantId = document.getElementById('change-rent-tenant-id').value;
+  const idx = tenants.findIndex(x => x.id === tenantId);
+  if (idx === -1) return;
+  const t = tenants[idx];
+  const newRent = Number(document.getElementById('change-rent-amount').value || 0);
+  const effectiveDate = document.getElementById('change-rent-date').value;
+  if (!newRent) { alert('Please enter the new monthly rent.'); return; }
+  if (!effectiveDate) { alert('Please choose the date this rent takes effect.'); return; }
+  const history = Array.isArray(t.rentHistory) && t.rentHistory.length
+    ? t.rentHistory.slice() : [{ date: t.moveIn || todayStr(), rent: Number(t.rent || 0) }];
+  // Remove any existing entry on the exact same date so re-submitting the same date corrects
+  // that entry instead of creating a confusing duplicate; every other (past or future) entry
+  // is left untouched, so past balances are never affected.
+  const filtered = history.filter(h => h.date !== effectiveDate);
+  filtered.push({ date: effectiveDate, rent: newRent });
+  const updated = { ...t, rentHistory: filtered };
+  // "Current rent" is whatever's in effect today — keeps it accurate whether this change is
+  // already active or is scheduled for a future date.
+  updated.rent = rentForDate(updated, new Date());
+  tenants[idx] = updated;
+  renderAll();
+  await fsSetTenant(updated);
+  changeRentModalBg.classList.remove('active');
+  auditLog(`Changed rent for ${t.name} — ${t.unit} to ${fmt(newRent)}/month effective ${formatDateNice(new Date(effectiveDate + 'T00:00:00'))}`, t.area);
 });
 
 
@@ -2389,10 +2487,12 @@ window.sendReceipt = async function(ledgerId) {
 
   // Open WhatsApp with a text message — WhatsApp links cannot auto-attach images,
   // so the downloaded receipt must be attached manually in the chat that opens.
+  // Uses a real link click rather than window.open(), which some phones now block or
+  // silently ignore once this app is installed to the Home Screen (standalone mode).
   const message = `Hello ${t.name}, here is your rent receipt No. ${l.receiptNo} for ${fmt(l.amount)} received on ${formatDateNice(new Date(l.date + 'T00:00:00'))}. Please see the attached receipt image. Thank you - NAMUYIMBA and SONS.`;
   const phone = normalizePhone(t.whatsapp);
   alert('The receipt image has been downloaded. WhatsApp will now open with a message — please attach the downloaded receipt image to the chat before sending, since WhatsApp links can\'t attach images automatically.');
-  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  openExternalLink(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`);
   renderAll();
 };
 
