@@ -50,6 +50,9 @@
 
   .area-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 20px; }
   .admin-row { display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:8px; }
+  .balance-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; }
+  .balance-card-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .balance-month-row { display:flex; justify-content:space-between; gap:10px; font-size:0.85rem; padding:4px 0; border-top:1px solid var(--border); }
   .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 20px; }
   .chart-box canvas { width: 100%; height: 220px; display: block; }
   .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
@@ -100,6 +103,7 @@
   .status-banner { font-size: 0.75rem; color: var(--muted); text-align: center; padding: 6px; }
   .filter-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
   .filter-row select { max-width: 180px; }
+  .search-input { flex: 1; min-width: 180px; }
   .back-link-inline { background: none; border: none; color: var(--primary); font-size: 0.82rem; cursor: pointer; text-decoration: underline; padding: 0; margin-bottom: 12px; }
 
   #role-gate { position: fixed; inset: 0; background: var(--bg); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -329,6 +333,7 @@
         <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
         <option value="Bunamwaya">Bunamwaya</option>
       </select>
+      <input id="tenant-search" class="search-input" placeholder="🔍 Search by name, unit, or phone...">
     </div>
     <div class="table-wrap">
       <table>
@@ -338,8 +343,25 @@
     </div>
   </div>
 
+  <div id="view-balances" class="view">
+    <button class="back-link-inline" onclick="activateView('overview')">← Back to Overview</button>
+    <div class="section-title" style="margin-top:0;">Balances Owed — by Tenant &amp; Month</div>
+    <div class="filter-row">
+      <select id="balances-area-filter">
+        <option value="">All areas</option>
+        <option value="Kiwenda">Kiwenda</option>
+        <option value="Watuba">Watuba</option>
+        <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+        <option value="Bunamwaya">Bunamwaya</option>
+      </select>
+      <input id="balances-search" class="search-input" placeholder="🔍 Search by tenant or unit...">
+    </div>
+    <div id="balances-list"></div>
+  </div>
+
   <div id="view-payments" class="view">
     <div class="section-title" style="margin:0 0 10px;">Payments Reported by Tenants (Awaiting Confirmation)</div>
+    <input id="claims-search" class="search-input" style="margin-bottom:10px;" placeholder="🔍 Search by tenant, area, or reference...">
     <div class="table-wrap" style="margin-bottom:24px;">
       <table>
         <thead><tr><th>Date</th><th>Area / Unit</th><th>Tenant</th><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th><th></th></tr></thead>
@@ -350,6 +372,7 @@
       <div class="section-title" style="margin:0;">Payments Ledger</div>
       <button class="btn" id="add-payment-btn">+ Record Payment</button>
     </div>
+    <input id="ledger-search" class="search-input" style="margin-bottom:10px;" placeholder="🔍 Search by tenant, area, or note...">
     <div class="table-wrap">
       <table>
         <thead><tr><th>Date</th><th>Area</th><th>Tenant</th><th>Type</th><th>Amount</th><th>Received By</th><th>Paid By</th><th>Note</th><th></th></tr></thead>
@@ -360,6 +383,7 @@
 
   <div id="view-complaints" class="view">
     <div class="section-title" style="margin:0 0 10px;">Tenant Complaints &amp; Requests</div>
+    <input id="complaint-search" class="search-input" style="margin-bottom:10px;" placeholder="🔍 Search by tenant, unit, or message...">
     <div class="table-wrap">
       <table>
         <thead><tr><th>Date</th><th>Area / Unit</th><th>Tenant</th><th>Message</th><th>Status</th><th></th></tr></thead>
@@ -373,6 +397,7 @@
       <div class="section-title" style="margin:0;">Activity Log</div>
       <button class="btn" id="add-activity-btn">+ Log Activity</button>
     </div>
+    <input id="activity-search" class="search-input" style="margin-bottom:10px;" placeholder="🔍 Search by details, type, or area...">
     <div class="table-wrap">
       <table>
         <thead><tr><th>Date</th><th>Area / Unit</th><th>Type</th><th>Details</th><th>Entered By</th><th>Status</th><th></th></tr></thead>
@@ -1182,6 +1207,37 @@ function tenantBalance(tenantId) {
   return sumOwed + extraCharges;
 }
 
+// Same figure as tenantBalance(), but broken down by which specific billing month(s)
+// the outstanding amount belongs to — for the "Balances Owed" view.
+function getTenantOwedBreakdown(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t || !t.moveIn) return { months: [], extraCharges: 0, total: 0 };
+  const today = new Date();
+  const moveIn = new Date(t.moveIn + 'T00:00:00');
+  const dueMonths = monthsDue(t.moveIn, today);
+  const sched = computeTenantSchedule(tenantId);
+  const extraCharges = ledger.filter(l => l.tenantId === tenantId && l.type === 'Charge').reduce((s,l) => s + Number(l.amount), 0);
+  const months = [];
+  for (let idx = sched.finalMonthsPaid; idx < dueMonths; idx++) {
+    const due = rentForDate(t, monthStart(moveIn, idx));
+    let owed = due;
+    let partial = false;
+    if (idx === sched.finalMonthsPaid && sched.finalPartialPaid > 0) {
+      owed = due - sched.finalPartialPaid;
+      partial = true;
+    }
+    owed = Math.max(owed, 0);
+    if (owed > 0) {
+      months.push({
+        label: formatDateNice(monthStart(moveIn, idx)) + ' – ' + formatDateNice(monthEnd(moveIn, idx)),
+        due, owed, partial
+      });
+    }
+  }
+  const total = months.reduce((s,m) => s + m.owed, 0) + extraCharges;
+  return { months, extraCharges, total };
+}
+
 // Opens an external link (WhatsApp, etc.) via a real, user-visible link click rather than
 // window.open(). Once this app is installed to a phone's Home Screen (standalone display
 // mode), window.open() is frequently blocked or silently does nothing on Android — a normal
@@ -1205,10 +1261,52 @@ function normalizePhone(num) {
   return n;
 }
 
+function renderBalancesView() {
+  const box = document.getElementById('balances-list');
+  if (!box) return;
+  const areaFilter = document.getElementById('balances-area-filter').value;
+  const q = document.getElementById('balances-search').value;
+  let list = tenants.filter(t => tenantBalance(t.id) > 0);
+  if (areaFilter) list = list.filter(t => t.area === areaFilter);
+  list = list.filter(t => matchesSearch([t.name, t.unit, t.area], q));
+  list.sort((a,b) => tenantBalance(b.id) - tenantBalance(a.id));
+  if (!list.length) {
+    box.innerHTML = `<p class="empty" style="padding:20px 0;">${tenants.some(t => tenantBalance(t.id) > 0) ? 'No tenants with a balance match this filter.' : 'No tenant currently owes a balance. 🎉'}</p>`;
+    return;
+  }
+  box.innerHTML = list.map(t => {
+    const b = getTenantOwedBreakdown(t.id);
+    const monthRows = b.months.map(m => `
+      <div class="balance-month-row">
+        <span>${escapeHtml(m.label)}${m.partial ? ' <span style="color:var(--muted);">(partly paid)</span>' : ''}</span>
+        <span>${fmt(m.owed)}${m.partial ? ` of ${fmt(m.due)}` : ''}</span>
+      </div>`).join('');
+    const chargeRow = b.extraCharges > 0 ? `
+      <div class="balance-month-row">
+        <span>Other charges (opening balance / extra charges)</span>
+        <span>${fmt(b.extraCharges)}</span>
+      </div>` : '';
+    return `
+    <div class="balance-card">
+      <div class="balance-card-head">
+        <div>
+          <strong>${escapeHtml(t.name)}</strong> — ${escapeHtml(t.unit)}, ${escapeHtml(t.area)}
+        </div>
+        <span class="badge owed">${fmt(b.total)}</span>
+      </div>
+      ${monthRows}${chargeRow}
+      <div class="row-actions" style="margin-top:8px;">
+        <button class="btn small" onclick="openPaymentModal('${t.id}')">Record Payment</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderAll() {
   renderOverview();
   renderMonthly();
   renderTenants();
+  renderBalancesView();
   renderLedger();
   renderPaymentClaims();
   renderComplaints();
@@ -1224,6 +1322,7 @@ function activateView(viewName) {
   // Canvases draw at 0 width while their view is display:none, so redraw once visible.
   if (viewName === 'overview') renderOverview();
   if (viewName === 'monthly') renderMonthly();
+  if (viewName === 'balances') renderBalancesView();
   if (viewName === 'settings') loadSettingsForm();
   if (viewName === 'admins') loadAdminList();
 }
@@ -1389,7 +1488,7 @@ function renderOverview() {
     <div class="card" onclick="activateView('tenants')"><div class="num">${activeTenants}</div><div class="label">Active Tenants</div></div>
     <div class="card" onclick="activateView('payments')"><div class="num">${fmt(totalCollected)}</div><div class="label">Total Collected (All-Time)</div></div>
     <div class="card" onclick="activateView('monthly')"><div class="num">${fmt(thisMonthCollected)}</div><div class="label">Collected This Month</div></div>
-    <div class="card owed" onclick="activateView('tenants')"><div class="num">${fmt(totalOwed)}</div><div class="label">Total Owed (Balances)</div></div>
+    <div class="card owed" onclick="activateView('balances')"><div class="num">${fmt(totalOwed)}</div><div class="label">Total Owed (Balances)</div></div>
     <div class="card" onclick="activateView('complaints')"><div class="num">${newComplaints}</div><div class="label">Open Complaints</div></div>
     <div class="card${pendingClaims ? ' owed' : ''}" onclick="activateView('payments')"><div class="num">${pendingClaims}</div><div class="label">Payment Reports from Tenants</div></div>
     <div class="card top"><div class="num">${bestAmount > 0 ? escapeHtml(bestArea) : '—'}</div><div class="label">Top Area This Month${bestAmount > 0 ? ' (' + fmt(bestAmount) + ')' : ''}</div></div>
@@ -1443,13 +1542,22 @@ function renderMonthly() {
   drawBarChart('chart-monthly-full', chartLabels, chronoKeys.map(k => byMonth[k]), { color: '#2f6b4f' });
 }
 
+function matchesSearch(fields, query) {
+  if (!query) return true;
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return fields.some(f => String(f || '').toLowerCase().includes(q));
+}
+
 function renderTenants() {
   const areaFilter = document.getElementById('tenant-filter-area').value;
+  const q = document.getElementById('tenant-search').value;
   let list = [...tenants];
   if (areaFilter) list = list.filter(t => t.area === areaFilter);
+  list = list.filter(t => matchesSearch([t.name, t.unit, t.whatsapp, t.otherPhone, t.area], q));
   const body = document.getElementById('tenants-body');
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="8" class="empty">No tenants yet. Tap "+ Add Tenant" to start.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty">${tenants.length ? 'No tenants match your search.' : 'No tenants yet. Tap "+ Add Tenant" to start.'}</td></tr>`;
     return;
   }
   body.innerHTML = list.map(t => {
@@ -1476,9 +1584,14 @@ function renderTenants() {
 
 function renderLedger() {
   const body = document.getElementById('ledger-body');
-  const rows = [...ledger].sort((a,b) => b.date.localeCompare(a.date));
+  const q = document.getElementById('ledger-search').value;
+  let rows = [...ledger].sort((a,b) => b.date.localeCompare(a.date));
+  rows = rows.filter(l => {
+    const t = tenants.find(x => x.id === l.tenantId);
+    return matchesSearch([t && t.name, t && t.area, t && t.unit, l.note, l.receivedBy, l.paidBy, l.type], q);
+  });
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9" class="empty">No ledger entries yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="empty">${ledger.length ? 'No ledger entries match your search.' : 'No ledger entries yet.'}</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(l => {
@@ -1504,9 +1617,11 @@ function renderLedger() {
 function renderPaymentClaims() {
   const body = document.getElementById('payment-claims-body');
   if (!body) return;
-  const rows = [...paymentClaims].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const q = document.getElementById('claims-search').value;
+  let rows = [...paymentClaims].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  rows = rows.filter(c => matchesSearch([c.name, c.area, c.unit, c.reference, c.method], q));
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="8" class="empty">No tenant-reported payments yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty">${paymentClaims.length ? 'No reports match your search.' : 'No tenant-reported payments yet.'}</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(c => {
@@ -1562,9 +1677,11 @@ window.deletePaymentClaim = async function(claimId) {
 
 function renderComplaints() {
   const body = document.getElementById('complaints-body');
-  const rows = [...complaints].sort((a,b) => b.date.localeCompare(a.date));
+  const q = document.getElementById('complaint-search').value;
+  let rows = [...complaints].sort((a,b) => b.date.localeCompare(a.date));
+  rows = rows.filter(c => matchesSearch([c.name, c.unit, c.area, c.message, c.phone], q));
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="6" class="empty">No complaints submitted yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="empty">${complaints.length ? 'No complaints match your search.' : 'No complaints submitted yet.'}</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(c => `
@@ -1583,9 +1700,11 @@ function renderComplaints() {
 
 function renderActivities() {
   const body = document.getElementById('activities-body');
-  const rows = [...activities].sort((a,b) => b.date.localeCompare(a.date));
+  const q = document.getElementById('activity-search').value;
+  let rows = [...activities].sort((a,b) => b.date.localeCompare(a.date));
+  rows = rows.filter(a => matchesSearch([a.details, a.type, a.area, a.unit, a.enteredBy], q));
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="7" class="empty">No activities logged yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty">${activities.length ? 'No activities match your search.' : 'No activities logged yet.'}</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(a => `
@@ -2111,9 +2230,16 @@ async function loadTenantPayInfo() {
     return;
   }
   let html = '';
+  // A small colored badge naming the provider (not the actual company logo artwork),
+  // so tenants can tell MTN and Airtel options apart at a glance.
+  const providerBadge = (provider) => {
+    if (/mtn/i.test(provider || '')) return `<span style="display:inline-block; background:#ffcb05; color:#111; font-weight:800; font-size:0.7rem; padding:2px 8px; border-radius:4px; margin-right:8px; vertical-align:middle;">MTN</span>`;
+    if (/airtel/i.test(provider || '')) return `<span style="display:inline-block; background:#ed1c24; color:#fff; font-weight:800; font-size:0.7rem; padding:2px 8px; border-radius:4px; margin-right:8px; vertical-align:middle;">Airtel</span>`;
+    return '';
+  };
   const momoBlock = (provider, number, name) => `
       <div style="background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px;">
-        <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">${escapeHtml(provider || 'Mobile Money')}</div>
+        <div style="font-weight:700; color:var(--primary-dark); margin-bottom:6px;">${providerBadge(provider)}${escapeHtml(provider || 'Mobile Money')}</div>
         <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(number)}</div>
         ${name ? `<div style="font-size:0.8rem; color:var(--muted);">Registered to: ${escapeHtml(name)}</div>` : ''}
         <button class="btn small secondary" style="margin-top:8px;" onclick="copyToClipboard('${escapeHtml(number)}')">📋 Copy number</button>
@@ -2584,6 +2710,13 @@ document.getElementById('activity-save').addEventListener('click', async () => {
 });
 
 document.getElementById('tenant-filter-area').addEventListener('change', renderTenants);
+document.getElementById('tenant-search').addEventListener('input', renderTenants);
+document.getElementById('ledger-search').addEventListener('input', renderLedger);
+document.getElementById('claims-search').addEventListener('input', renderPaymentClaims);
+document.getElementById('complaint-search').addEventListener('input', renderComplaints);
+document.getElementById('activity-search').addEventListener('input', renderActivities);
+document.getElementById('balances-search').addEventListener('input', renderBalancesView);
+document.getElementById('balances-area-filter').addEventListener('change', renderBalancesView);
 </script>
 
 </body>
