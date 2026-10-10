@@ -53,6 +53,17 @@
   .balance-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; }
   .balance-card-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
   .balance-month-row { display:flex; justify-content:space-between; gap:10px; font-size:0.85rem; padding:4px 0; border-top:1px solid var(--border); }
+  .top-tenant-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; display:flex; gap:12px; align-items:flex-start; }
+  .top-tenant-rank { font-size:1.6rem; line-height:1; }
+  .active-tenant-row { padding:8px 0; border-top:1px solid var(--border); font-size:0.9rem; }
+  .active-tenant-row:first-child { border-top:none; }
+  @media print {
+    body * { visibility: hidden; }
+    .modal-bg.printable.active, .modal-bg.printable.active * { visibility: visible; }
+    .modal-bg.printable.active { position: fixed; inset: 0; background: white; display: flex; align-items: flex-start; }
+    .modal-bg.printable.active .modal-actions { display: none; }
+    .modal-bg.printable.active .modal { box-shadow: none; max-height: none; overflow: visible; }
+  }
   .chart-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 20px; }
   .chart-box canvas { width: 100%; height: 220px; display: block; }
   .area-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
@@ -270,7 +281,7 @@
 <div id="app-shell">
 <header>
   <h1>🏠 NAMUYIMBA and SONS</h1>
-  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> <span class="chief-only" style="display:none;">&nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></span> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
+  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="financial-statement-btn">📊 financial statement</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> <span class="chief-only" style="display:none;">&nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></span> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
   <input type="file" id="restore-file-input" accept="application/json" style="display:none;">
   <p id="admin-session-label" style="font-size:0.75rem; color:var(--muted); margin-top:4px;"></p>
 </header>
@@ -289,6 +300,8 @@
 
   <div id="view-overview" class="view active">
     <div class="cards" id="overview-cards"></div>
+    <div class="section-title">🏆 Top Tenants</div>
+    <div id="top-tenants-panel"></div>
     <div class="section-title">Collections Trend (last 6 months)</div>
     <div class="chart-box"><canvas id="chart-monthly-trend"></canvas></div>
     <div class="section-title">Collected by Area (This Month)</div>
@@ -517,6 +530,83 @@
     <div class="modal-actions">
       <button class="btn secondary" id="change-rent-cancel">Cancel</button>
       <button class="btn" id="change-rent-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="active-tenants-modal-bg">
+  <div class="modal">
+    <h3>Active Tenants</h3>
+    <div id="active-tenants-list"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="active-tenants-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg printable" id="financial-statement-modal-bg">
+  <div class="modal" style="max-width:740px;">
+    <div id="financial-printable">
+      <h3 style="margin-bottom:2px;">NAMUYIMBA and SONS — Financial Statement</h3>
+      <div class="filter-row" style="margin-top:8px;">
+        <select id="fin-period">
+          <option value="month">This Month</option>
+          <option value="lastmonth">Last Month</option>
+          <option value="year">This Year</option>
+          <option value="all">All Time</option>
+          <option value="custom">Custom Range</option>
+        </select>
+        <input type="date" id="fin-from" style="display:none;">
+        <input type="date" id="fin-to" style="display:none;">
+      </div>
+      <p id="fin-period-label" style="font-size:0.85rem; color:var(--muted); margin-top:-6px;"></p>
+
+      <div class="cards" id="fin-summary-cards" style="margin-top:10px;"></div>
+
+      <div class="section-title" style="font-size:0.95rem;">By Area</div>
+      <div class="table-wrap">
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Area</th><th style="padding:4px 6px; text-align:right;">Billed</th><th style="padding:4px 6px; text-align:right;">Collected</th><th style="padding:4px 6px; text-align:right;">Outstanding (now)</th></tr></thead>
+          <tbody id="fin-area-body"></tbody>
+        </table>
+      </div>
+
+      <div class="section-title" style="font-size:0.95rem;">By Payment Method</div>
+      <div class="table-wrap">
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Method</th><th style="padding:4px 6px; text-align:right;">Amount</th><th style="padding:4px 6px; text-align:right;">Share</th></tr></thead>
+          <tbody id="fin-method-body"></tbody>
+        </table>
+      </div>
+
+      <div class="section-title" style="font-size:0.95rem;">Occupancy (as of today)</div>
+      <div id="fin-occupancy"></div>
+
+      <p id="fin-generated" style="font-size:0.72rem; color:var(--muted); margin-top:14px;"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="financial-statement-close">Close</button>
+      <button class="btn" id="financial-statement-print">🖨️ Print / Save as PDF</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg printable" id="statement-modal-bg">
+  <div class="modal" style="max-width:700px;">
+    <div id="statement-printable">
+      <h3 style="margin-bottom:2px;">NAMUYIMBA and SONS — Tenant Statement</h3>
+      <div id="statement-tenant-info" style="font-size:0.85rem; color:var(--muted); margin-bottom:12px;"></div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Date</th><th style="padding:4px 6px;">Description</th><th style="padding:4px 6px; text-align:right;">Charge</th><th style="padding:4px 6px; text-align:right;">Paid</th><th style="padding:4px 6px; text-align:right;">Balance</th></tr></thead>
+          <tbody id="statement-body"></tbody>
+        </table>
+      </div>
+      <p id="statement-generated" style="font-size:0.72rem; color:var(--muted); margin-top:14px;"></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="statement-close">Close</button>
+      <button class="btn" id="statement-print">🖨️ Print / Save as PDF</button>
     </div>
   </div>
 </div>
@@ -1261,6 +1351,283 @@ function normalizePhone(num) {
   return n;
 }
 
+window.showActiveTenantsModal = function() {
+  const list = tenants.filter(t => t.status === 'Active').sort((a,b) => a.name.localeCompare(b.name));
+  const box = document.getElementById('active-tenants-list');
+  box.innerHTML = list.length ? list.map(t => `
+    <div class="active-tenant-row">
+      <strong>${escapeHtml(t.name)}</strong><br>
+      <span style="color:var(--muted);">${escapeHtml(t.unit)}, ${escapeHtml(t.area)}</span>
+    </div>`).join('') : `<p class="empty">No active tenants yet.</p>`;
+  document.getElementById('active-tenants-modal-bg').classList.add('active');
+};
+document.getElementById('active-tenants-close').addEventListener('click', () => document.getElementById('active-tenants-modal-bg').classList.remove('active'));
+
+// Scores a tenant on how reliably they pay: how much of what they've been billed is actually
+// cleared (balanceScore), how close their payment-to-payment gaps are to a normal monthly
+// cycle (consistencyScore), and how early in their personal billing cycle they tend to pay
+// (promptnessScore, measured against their move-in day of month). Needs at least 2 recorded
+// payments — there's no "payment history" to judge with fewer than that.
+function getTenantPaymentStats(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t || !t.moveIn) return null;
+  const payments = ledger.filter(l => l.tenantId === tenantId && l.type === 'Payment' && l.date).map(l => l.date).sort();
+  if (payments.length < 2) return null;
+  const totalPaid = ledger.filter(l => l.tenantId === tenantId && l.type === 'Payment').reduce((s,l) => s + Number(l.amount), 0);
+  const balance = tenantBalance(tenantId);
+  const balanceScore = (totalPaid + balance) > 0 ? totalPaid / (totalPaid + balance) : 0;
+
+  const gaps = [];
+  for (let i = 1; i < payments.length; i++) {
+    const d1 = new Date(payments[i-1] + 'T00:00:00');
+    const d2 = new Date(payments[i] + 'T00:00:00');
+    gaps.push((d2 - d1) / 86400000);
+  }
+  const avgDeviation = gaps.reduce((s,g) => s + Math.abs(g - 30), 0) / gaps.length;
+  const consistencyScore = Math.max(0, 1 - avgDeviation / 30);
+
+  const anchorDay = new Date(t.moveIn + 'T00:00:00').getDate();
+  const offsets = payments.map(p => {
+    const day = new Date(p + 'T00:00:00').getDate();
+    let offset = day - anchorDay;
+    if (offset < 0) offset += 30;
+    return offset;
+  });
+  const avgOffset = offsets.reduce((s,o) => s + o, 0) / offsets.length;
+  const promptnessScore = Math.max(0, 1 - avgOffset / 30);
+
+  const composite = balanceScore * 0.5 + consistencyScore * 0.3 + promptnessScore * 0.2;
+  return { balanceScore, consistencyScore, promptnessScore, composite, paymentCount: payments.length };
+}
+
+function getTopTenants(n) {
+  return tenants
+    .map(t => ({ t, stats: getTenantPaymentStats(t.id) }))
+    .filter(x => x.stats)
+    .sort((a,b) => b.stats.composite - a.stats.composite)
+    .slice(0, n);
+}
+
+function tenantStatsReason(stats) {
+  const bits = [];
+  if (stats.balanceScore >= 0.98) bits.push('balance fully cleared');
+  else if (stats.balanceScore >= 0.85) bits.push('balance mostly cleared');
+  if (stats.consistencyScore >= 0.75) bits.push('pays on a steady monthly cycle');
+  if (stats.promptnessScore >= 0.75) bits.push('pays early each cycle');
+  if (!bits.length) bits.push(`${stats.paymentCount} payments on record`);
+  return bits.join(', ');
+}
+
+function renderTopTenants() {
+  const box = document.getElementById('top-tenants-panel');
+  if (!box) return;
+  const top = getTopTenants(2);
+  if (!top.length) {
+    box.innerHTML = `<p class="empty" style="padding:14px 0;">Not enough payment history yet — each tenant needs at least 2 recorded payments to be ranked.</p>`;
+    return;
+  }
+  const medals = ['🥇', '🥈'];
+  box.innerHTML = top.map(({t, stats}, i) => `
+    <div class="top-tenant-card">
+      <div class="top-tenant-rank">${medals[i] || '🏅'}</div>
+      <div>
+        <strong>${escapeHtml(t.name)}</strong> — ${escapeHtml(t.unit)}, ${escapeHtml(t.area)}<br>
+        <span style="font-size:0.82rem; color:var(--muted);">${escapeHtml(tenantStatsReason(stats))}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ---- Tenant Statement ----
+function buildTenantStatementRows(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t || !t.moveIn) return [];
+  const moveIn = new Date(t.moveIn + 'T00:00:00');
+  const dueMonths = monthsDue(t.moveIn, new Date());
+  const rows = [];
+  for (let idx = 0; idx < dueMonths; idx++) {
+    const mStart = monthStart(moveIn, idx);
+    rows.push({
+      date: mStart.toISOString().slice(0,10),
+      desc: 'Rent due: ' + formatDateNice(mStart) + ' – ' + formatDateNice(monthEnd(moveIn, idx)),
+      charge: rentForDate(t, mStart), payment: 0
+    });
+  }
+  ledger.filter(l => l.tenantId === tenantId && (l.type === 'Payment' || l.type === 'Charge')).forEach(l => {
+    rows.push({
+      date: l.date,
+      desc: l.type === 'Payment' ? ('Payment received' + (l.note ? ' — ' + l.note : '') + (l.paidBy ? ' (' + l.paidBy + ')' : '')) : ('Charge' + (l.note ? ': ' + l.note : '')),
+      charge: l.type === 'Charge' ? Number(l.amount) : 0,
+      payment: l.type === 'Payment' ? Number(l.amount) : 0
+    });
+  });
+  // Charges due on a date are listed before payments received that same date — a reasonable,
+  // consistent convention for same-day ordering.
+  rows.sort((a,b) => a.date === b.date ? (b.charge - a.charge) : a.date.localeCompare(b.date));
+  let bal = 0;
+  rows.forEach(r => { bal += r.charge - r.payment; r.balance = bal; });
+  return rows;
+}
+
+window.openStatementModal = function(tenantId) {
+  const t = tenants.find(x => x.id === tenantId);
+  if (!t) return;
+  const rows = buildTenantStatementRows(tenantId);
+  document.getElementById('statement-tenant-info').innerHTML =
+    `${escapeHtml(t.name)} — ${escapeHtml(t.unit)}, ${escapeHtml(t.area)}<br>` +
+    `Moved in: ${t.moveIn ? formatDateNice(new Date(t.moveIn + 'T00:00:00')) : '—'} &nbsp;·&nbsp; Current rent: ${fmt(rentForDate(t, new Date()))}/month` +
+    (t.whatsapp ? ` &nbsp;·&nbsp; ${escapeHtml(t.whatsapp)}` : '');
+  document.getElementById('statement-body').innerHTML = rows.length ? rows.map(r => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:4px 6px; white-space:nowrap;">${r.date}</td>
+      <td style="padding:4px 6px;">${escapeHtml(r.desc)}</td>
+      <td style="padding:4px 6px; text-align:right;">${r.charge ? fmt(r.charge) : ''}</td>
+      <td style="padding:4px 6px; text-align:right;">${r.payment ? fmt(r.payment) : ''}</td>
+      <td style="padding:4px 6px; text-align:right; font-weight:600;">${fmt(r.balance)}</td>
+    </tr>`).join('') : `<tr><td colspan="5" class="empty">No billing history yet.</td></tr>`;
+  document.getElementById('statement-generated').textContent = 'Generated ' + formatDateNice(new Date()) + ' · A positive balance is money still owed to NAMUYIMBA and SONS.';
+  document.getElementById('statement-modal-bg').classList.add('active');
+};
+document.getElementById('statement-close').addEventListener('click', () => document.getElementById('statement-modal-bg').classList.remove('active'));
+document.getElementById('statement-print').addEventListener('click', () => window.print());
+
+// ---- Financial Statement (whole business, not one tenant) ----
+function dateKey(d) { return d.toISOString().slice(0,10); }
+
+function getFinancialPeriodRange() {
+  const preset = document.getElementById('fin-period').value;
+  const today = new Date();
+  if (preset === 'month') return { from: new Date(today.getFullYear(), today.getMonth(), 1), to: today };
+  if (preset === 'lastmonth') return { from: new Date(today.getFullYear(), today.getMonth()-1, 1), to: new Date(today.getFullYear(), today.getMonth(), 0) };
+  if (preset === 'year') return { from: new Date(today.getFullYear(), 0, 1), to: today };
+  if (preset === 'all') return { from: null, to: today };
+  // custom
+  const fromVal = document.getElementById('fin-from').value;
+  const toVal = document.getElementById('fin-to').value;
+  return {
+    from: fromVal ? new Date(fromVal + 'T00:00:00') : null,
+    to: toVal ? new Date(toVal + 'T00:00:00') : today
+  };
+}
+
+// Billed = rent that came due within the period, per tenant's own billing calendar.
+// Collected/Charges = actual ledger entries dated within the period.
+// Outstanding is always a live, as-of-today snapshot — balances carry forward, so they
+// aren't meaningfully "for" any one period.
+function computeFinancialStatement(fromDate, toDate) {
+  const fromKey = fromDate ? dateKey(fromDate) : null;
+  const toKey = dateKey(toDate);
+  const inPeriod = (d) => d && (!fromKey || d >= fromKey) && d <= toKey;
+
+  const periodPayments = ledger.filter(l => l.type === 'Payment' && inPeriod(l.date));
+  const totalCollected = periodPayments.reduce((s,l) => s + Number(l.amount), 0);
+  const periodCharges = ledger.filter(l => l.type === 'Charge' && inPeriod(l.date));
+  const totalCharges = periodCharges.reduce((s,l) => s + Number(l.amount), 0);
+
+  const byArea = {};
+  AREAS.forEach(a => byArea[a.name] = { billed: 0, collected: 0, outstanding: 0 });
+  let totalBilled = 0;
+
+  tenants.forEach(t => {
+    if (!t.moveIn || !byArea[t.area]) return;
+    const moveIn = new Date(t.moveIn + 'T00:00:00');
+    const dueMonths = monthsDue(t.moveIn, toDate);
+    for (let idx = 0; idx < dueMonths; idx++) {
+      const mStart = monthStart(moveIn, idx);
+      if (inPeriod(dateKey(mStart))) {
+        const due = rentForDate(t, mStart);
+        totalBilled += due;
+        byArea[t.area].billed += due;
+      }
+    }
+    byArea[t.area].collected += ledger
+      .filter(l => l.tenantId === t.id && l.type === 'Payment' && inPeriod(l.date))
+      .reduce((s,l) => s + Number(l.amount), 0);
+    byArea[t.area].outstanding += Math.max(0, tenantBalance(t.id));
+  });
+
+  const totalOutstanding = tenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+
+  const methodTotals = {};
+  periodPayments.forEach(l => {
+    const m = l.paidBy || 'Unspecified';
+    methodTotals[m] = (methodTotals[m] || 0) + Number(l.amount);
+  });
+
+  const occupancy = AREAS.map(a => {
+    const areaTenants = tenants.filter(t => t.area === a.name);
+    return { area: a.name, active: areaTenants.filter(t => t.status === 'Active').length, totalUnits: a.units, totalTenants: areaTenants.length };
+  });
+
+  const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled * 100) : (totalCollected > 0 ? 100 : 0);
+  return { totalBilled, totalCollected, totalCharges, totalOutstanding, collectionRate, byArea, methodTotals, occupancy };
+}
+
+function renderFinancialStatement() {
+  const { from, to } = getFinancialPeriodRange();
+  const stmt = computeFinancialStatement(from, to);
+
+  document.getElementById('fin-period-label').textContent =
+    (from ? formatDateNice(from) : 'the beginning') + ' – ' + formatDateNice(to) +
+    ' · Outstanding balances are always as of today, regardless of the period chosen.';
+
+  document.getElementById('fin-summary-cards').innerHTML = `
+    <div class="card"><div class="num">${fmt(stmt.totalBilled)}</div><div class="label">Rent Billed (period)</div></div>
+    <div class="card"><div class="num">${fmt(stmt.totalCollected)}</div><div class="label">Collected (period)</div></div>
+    <div class="card"><div class="num">${Math.round(stmt.collectionRate)}%</div><div class="label">Collection Rate</div></div>
+    <div class="card owed"><div class="num">${fmt(stmt.totalOutstanding)}</div><div class="label">Outstanding (now)</div></div>
+    ${stmt.totalCharges > 0 ? `<div class="card"><div class="num">${fmt(stmt.totalCharges)}</div><div class="label">Other Charges (period)</div></div>` : ''}
+  `;
+
+  document.getElementById('fin-area-body').innerHTML = AREAS.map(a => {
+    const row = stmt.byArea[a.name];
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:4px 6px;">${escapeHtml(a.name)}</td>
+      <td style="padding:4px 6px; text-align:right;">${fmt(row.billed)}</td>
+      <td style="padding:4px 6px; text-align:right;">${fmt(row.collected)}</td>
+      <td style="padding:4px 6px; text-align:right;">${fmt(row.outstanding)}</td>
+    </tr>`;
+  }).join('');
+
+  const methodEntries = Object.entries(stmt.methodTotals);
+  document.getElementById('fin-method-body').innerHTML = methodEntries.length ? methodEntries.map(([method, amt]) => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:4px 6px;">${escapeHtml(method)}</td>
+      <td style="padding:4px 6px; text-align:right;">${fmt(amt)}</td>
+      <td style="padding:4px 6px; text-align:right;">${stmt.totalCollected > 0 ? Math.round(amt / stmt.totalCollected * 100) : 0}%</td>
+    </tr>`).join('') : `<tr><td colspan="3" class="empty">No payments in this period.</td></tr>`;
+
+  document.getElementById('fin-occupancy').innerHTML = stmt.occupancy.map(o => `
+    <div class="balance-month-row">
+      <span>${escapeHtml(o.area)}</span>
+      <span>${o.active} active${o.totalUnits ? ' of ' + o.totalUnits + ' units' : ' tenant(s)'}</span>
+    </div>`).join('');
+
+  document.getElementById('fin-generated').textContent = 'Generated ' + formatDateNice(new Date());
+}
+
+document.getElementById('financial-statement-btn').addEventListener('click', () => {
+  document.getElementById('fin-period').value = 'month';
+  document.getElementById('fin-from').style.display = 'none';
+  document.getElementById('fin-to').style.display = 'none';
+  renderFinancialStatement();
+  document.getElementById('financial-statement-modal-bg').classList.add('active');
+});
+document.getElementById('fin-period').addEventListener('change', () => {
+  const isCustom = document.getElementById('fin-period').value === 'custom';
+  document.getElementById('fin-from').style.display = isCustom ? 'block' : 'none';
+  document.getElementById('fin-to').style.display = isCustom ? 'block' : 'none';
+  if (isCustom) {
+    const today = todayStr();
+    if (!document.getElementById('fin-from').value) document.getElementById('fin-from').value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10);
+    if (!document.getElementById('fin-to').value) document.getElementById('fin-to').value = today;
+  }
+  renderFinancialStatement();
+});
+document.getElementById('fin-from').addEventListener('change', renderFinancialStatement);
+document.getElementById('fin-to').addEventListener('change', renderFinancialStatement);
+document.getElementById('financial-statement-close').addEventListener('click', () => document.getElementById('financial-statement-modal-bg').classList.remove('active'));
+document.getElementById('financial-statement-print').addEventListener('click', () => window.print());
+
 function renderBalancesView() {
   const box = document.getElementById('balances-list');
   if (!box) return;
@@ -1485,7 +1852,7 @@ function renderOverview() {
   });
 
   document.getElementById('overview-cards').innerHTML = `
-    <div class="card" onclick="activateView('tenants')"><div class="num">${activeTenants}</div><div class="label">Active Tenants</div></div>
+    <div class="card" onclick="showActiveTenantsModal()"><div class="num">${activeTenants}</div><div class="label">Active Tenants</div></div>
     <div class="card" onclick="activateView('payments')"><div class="num">${fmt(totalCollected)}</div><div class="label">Total Collected (All-Time)</div></div>
     <div class="card" onclick="activateView('monthly')"><div class="num">${fmt(thisMonthCollected)}</div><div class="label">Collected This Month</div></div>
     <div class="card owed" onclick="activateView('balances')"><div class="num">${fmt(totalOwed)}</div><div class="label">Total Owed (Balances)</div></div>
@@ -1520,6 +1887,7 @@ function renderOverview() {
   drawBarChart('chart-area-compare', AREAS.map(a => a.name.split(' ')[0]), AREAS.map(a => areaCollected(a.name, mKey)), { color: '#c98a3b' });
   drawPieChart('chart-tenant-status', ['Active', 'Vacated'], [activeTenants, vacatedTenants], ['#2f6b4f', '#c98a3b']);
   drawPieChart('chart-collected-vs-owed', ['Collected This Month', 'Outstanding Balance'], [thisMonthCollected, totalOwed], ['#2f6b4f', '#c94b3b']);
+  renderTopTenants();
 }
 
 function renderMonthly() {
@@ -1575,6 +1943,7 @@ function renderTenants() {
         <button class="btn small" onclick="openPaymentModal('${t.id}')">Payment</button>
         <button class="btn small secondary" onclick="addExtraCharge('${t.id}')">Add Charge</button>
         <button class="btn small secondary" onclick="openChangeRentModal('${t.id}')">💲 Change Rent</button>
+        <button class="btn small secondary" onclick="openStatementModal('${t.id}')">📄 Statement</button>
         <button class="icon-btn" onclick="editTenant('${t.id}')">✏️</button>
         ${isChief() ? `<button class="icon-btn" onclick="deleteTenant('${t.id}')">🗑️</button>` : ''}
       </td>
