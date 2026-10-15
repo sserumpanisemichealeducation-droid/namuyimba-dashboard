@@ -28,13 +28,26 @@
   input[type=date] { min-height: 38px; }
   input[type=checkbox], input[type=radio] { -webkit-appearance: auto; appearance: auto; width: auto; }
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
-  header { background: var(--primary-dark); color: white; padding: 16px 20px; }
-  header h1 { margin: 0; font-size: 1.25rem; }
+  header { background: var(--primary-dark); color: white; padding: 16px 20px; position: relative; }
+  header h1 { margin: 0; font-size: 1.25rem; padding-left: 36px; }
   header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.85; }
 
   nav { display: flex; gap: 4px; background: var(--primary); padding: 0 12px; overflow-x: auto; }
   nav button { background: transparent; border: none; color: white; padding: 12px 14px; font-size: 0.85rem; cursor: pointer; opacity: 0.75; border-bottom: 3px solid transparent; white-space: nowrap; }
   nav button.active { opacity: 1; border-bottom: 3px solid var(--accent); font-weight: 600; }
+
+  .menu-btn { position: absolute; left: 16px; top: max(16px, env(safe-area-inset-top)); background: none; border: none; color: white; font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 4px 6px; }
+  .fin-statement-banner { padding: 12px 16px 0; max-width: 1100px; margin: 0 auto; }
+  .fin-statement-banner .btn { font-size: 1rem; padding: 14px; }
+
+  .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+  .side-drawer { position: fixed; top: 0; bottom: 0; left: 0; width: 270px; max-width: 80vw; background: white; z-index: 50; transform: translateX(-100%); transition: transform 0.25s ease; overflow-y: auto; padding-top: env(safe-area-inset-top); box-shadow: 2px 0 12px rgba(0,0,0,0.2); }
+  .side-drawer.open { transform: translateX(0); }
+  .side-drawer-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; background: var(--primary-dark); color: white; }
+  .side-drawer-head .icon-btn { color: white; }
+  .drawer-item { display: block; width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--border); padding: 14px 18px; font-size: 0.95rem; color: var(--text); cursor: pointer; }
+  .side-drawer .tab-btn.active { color: var(--primary-dark); font-weight: 700; background: var(--bg); }
 
   main { padding: 16px; max-width: 1100px; margin: 0 auto; }
   .view { display: none; }
@@ -279,12 +292,33 @@
 </div>
 
 <div id="app-shell">
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+<div class="side-drawer" id="side-drawer">
+  <div class="side-drawer-head">
+    <strong>Menu</strong>
+    <button class="icon-btn" id="drawer-close" style="font-size:1.2rem;">✕</button>
+  </div>
+  <button class="drawer-item tab-btn active" data-view="overview">Overview</button>
+  <button class="drawer-item" id="drawer-fin-btn">📊 Financial Statement</button>
+  <button class="drawer-item tab-btn" data-view="tenants">Tenants &amp; Balances</button>
+  <button class="drawer-item tab-btn" data-view="payments">Payments</button>
+  <button class="drawer-item tab-btn" data-view="complaints">Complaints</button>
+  <button class="drawer-item tab-btn" data-view="activities">Activity Log</button>
+  <button class="drawer-item tab-btn chief-only" data-view="settings" style="display:none;">Payment Settings</button>
+  <button class="drawer-item tab-btn chief-only" data-view="admins" style="display:none;">Admins</button>
+</div>
+
 <header>
+  <button class="menu-btn" id="menu-btn" aria-label="Menu">☰</button>
   <h1>🏠 NAMUYIMBA and SONS</h1>
-  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="financial-statement-btn">📊 financial statement</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> <span class="chief-only" style="display:none;">&nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></span> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
+  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> <span class="chief-only" style="display:none;">&nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></span> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
   <input type="file" id="restore-file-input" accept="application/json" style="display:none;">
   <p id="admin-session-label" style="font-size:0.75rem; color:var(--muted); margin-top:4px;"></p>
 </header>
+
+<div class="fin-statement-banner">
+  <button class="btn" id="financial-statement-btn" style="width:100%;">📊 Open Financial Statement</button>
+</div>
 
 <nav>
   <button class="tab-btn active" data-view="overview">Overview</button>
@@ -306,6 +340,8 @@
     <div class="chart-box"><canvas id="chart-monthly-trend"></canvas></div>
     <div class="section-title">Collected by Area (This Month)</div>
     <div class="chart-box"><canvas id="chart-area-compare"></canvas></div>
+    <div class="section-title">Collection Rate by Area (This Month, %)</div>
+    <div class="chart-box"><canvas id="chart-collection-rate"></canvas></div>
     <div class="section-title">Tenants by Status</div>
     <div class="chart-box"><canvas id="chart-tenant-status"></canvas></div>
     <div class="section-title">This Month's Collections vs Outstanding Balance</div>
@@ -501,8 +537,11 @@
     <label>Monthly rent (UGX)</label>
     <input id="tenant-rent" type="number" placeholder="e.g. 500000">
     <p id="tenant-rent-note" style="font-size:0.75rem; color:var(--muted); margin-top:-6px;">Editing this field corrects a mistake — it fixes the rent for this tenant's whole current billing period, including past months already recorded. To raise or lower rent from a specific date going forward without touching past balances, use "💲 Change Rent" on the tenant's row instead.</p>
-    <label>Opening balance owed (UGX, if any — for debt before this system started)</label>
-    <input id="tenant-opening-balance" type="number" placeholder="0">
+    <div id="tenant-opening-balance-wrap">
+      <label>Opening balance owed (UGX, if any — for debt before this system started)</label>
+      <input id="tenant-opening-balance" type="number" placeholder="0">
+      <p style="font-size:0.75rem; color:var(--muted); margin-top:-6px;">This only applies once, when first adding the tenant. To correct or remove it afterwards, go to Payments → Ledger, search "opening balance", and use the ✏️ or 🗑️ button on that row.</p>
+    </div>
     <label>Status</label>
     <select id="tenant-status">
       <option value="Active">Active</option>
@@ -566,7 +605,7 @@
       <div class="section-title" style="font-size:0.95rem;">By Area</div>
       <div class="table-wrap">
         <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
-          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Area</th><th style="padding:4px 6px; text-align:right;">Billed</th><th style="padding:4px 6px; text-align:right;">Collected</th><th style="padding:4px 6px; text-align:right;">Outstanding (now)</th></tr></thead>
+          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Area</th><th style="padding:4px 6px; text-align:right;">Billed</th><th style="padding:4px 6px; text-align:right;">Collected</th><th style="padding:4px 6px; text-align:right;">Collection %</th><th style="padding:4px 6px; text-align:right;">Outstanding (now)</th></tr></thead>
           <tbody id="fin-area-body"></tbody>
         </table>
       </div>
@@ -857,7 +896,7 @@ const AREAS = [
   { name: 'Kiwenda', units: 15 },
   { name: 'Watuba', units: 29 },
   { name: 'Wankulukuku Guest House', units: null },
-  { name: 'Bunamwaya', units: 17 }
+  { name: 'Bunamwaya', units: 18 }
 ];
 const ADMIN_PASSWORD = '1234'; // shared password for regular admins
 // The Chief Admin's password is never written in this file — only a salted SHA-256 fingerprint of it.
@@ -1580,10 +1619,12 @@ function renderFinancialStatement() {
 
   document.getElementById('fin-area-body').innerHTML = AREAS.map(a => {
     const row = stmt.byArea[a.name];
+    const pct = row.billed > 0 ? Math.round(row.collected / row.billed * 100) : (row.collected > 0 ? 100 : null);
     return `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:4px 6px;">${escapeHtml(a.name)}</td>
       <td style="padding:4px 6px; text-align:right;">${fmt(row.billed)}</td>
       <td style="padding:4px 6px; text-align:right;">${fmt(row.collected)}</td>
+      <td style="padding:4px 6px; text-align:right;">${pct === null ? '—' : pct + '%'}</td>
       <td style="padding:4px 6px; text-align:right;">${fmt(row.outstanding)}</td>
     </tr>`;
   }).join('');
@@ -1605,13 +1646,29 @@ function renderFinancialStatement() {
   document.getElementById('fin-generated').textContent = 'Generated ' + formatDateNice(new Date());
 }
 
-document.getElementById('financial-statement-btn').addEventListener('click', () => {
+function openFinancialStatementModal() {
   document.getElementById('fin-period').value = 'month';
   document.getElementById('fin-from').style.display = 'none';
   document.getElementById('fin-to').style.display = 'none';
   renderFinancialStatement();
   document.getElementById('financial-statement-modal-bg').classList.add('active');
-});
+  closeDrawer();
+}
+document.getElementById('financial-statement-btn').addEventListener('click', openFinancialStatementModal);
+document.getElementById('drawer-fin-btn').addEventListener('click', openFinancialStatementModal);
+
+// ---- Side drawer (mirrors the horizontal nav, plus Financial Statement) ----
+function openDrawer() {
+  document.getElementById('side-drawer').classList.add('open');
+  document.getElementById('drawer-backdrop').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('side-drawer').classList.remove('open');
+  document.getElementById('drawer-backdrop').classList.remove('open');
+}
+document.getElementById('menu-btn').addEventListener('click', openDrawer);
+document.getElementById('drawer-close').addEventListener('click', closeDrawer);
+document.getElementById('drawer-backdrop').addEventListener('click', closeDrawer);
 document.getElementById('fin-period').addEventListener('change', () => {
   const isCustom = document.getElementById('fin-period').value === 'custom';
   document.getElementById('fin-from').style.display = isCustom ? 'block' : 'none';
@@ -1839,8 +1896,12 @@ function renderOverview() {
   const vacatedTenants = tenants.length - activeTenants;
   const totalCollected = ledger.filter(l => l.type === 'Payment').reduce((s,l) => s + Number(l.amount), 0);
   const mKey = currentMonthKey();
+  const now = new Date();
   const thisMonthCollected = ledger.filter(l => l.type === 'Payment' && l.date && l.date.slice(0,7) === mKey)
     .reduce((s,l) => s + Number(l.amount), 0);
+  // Reused below for both the area cards' Collection % and the Collection Rate chart —
+  // "billed" is rent that actually came due this month per tenant's own billing cycle.
+  const thisMonthStmt = computeFinancialStatement(new Date(now.getFullYear(), now.getMonth(), 1), now);
   const totalOwed = tenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
   const newComplaints = complaints.filter(c => c.status !== 'Resolved').length;
   const pendingClaims = paymentClaims.filter(c => c.status === 'Pending').length;
@@ -1866,12 +1927,15 @@ function renderOverview() {
     const collectedAll = areaCollected(a.name, null);
     const collectedMonth = areaCollected(a.name, mKey);
     const owed = areaTenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+    const areaBilledMonth = thisMonthStmt.byArea[a.name] ? thisMonthStmt.byArea[a.name].billed : 0;
+    const collectionPct = areaBilledMonth > 0 ? Math.round(collectedMonth / areaBilledMonth * 100) : (collectedMonth > 0 ? 100 : null);
     return `
       <div class="area-card ${a.name === bestArea && bestAmount > 0 ? 'best' : ''}">
         <h4>${a.name} ${a.units ? `<span class="units-tag">(${a.units} units)</span>` : ''}</h4>
         <div class="stat-row"><span>Tenants</span><span>${areaTenants.length}</span></div>
         <div class="stat-row"><span>Collected (all-time)</span><span>${fmt(collectedAll)}</span></div>
         <div class="stat-row"><span>Collected (this month)</span><span>${fmt(collectedMonth)}</span></div>
+        <div class="stat-row"><span>Collection rate (this month)</span><span>${collectionPct === null ? '—' : collectionPct + '%'}</span></div>
         <div class="stat-row"><span>Owed</span><span>${fmt(owed)}</span></div>
       </div>`;
   }).join('');
@@ -1885,6 +1949,11 @@ function renderOverview() {
   const trend = getLastNMonthsCollected(6);
   drawBarChart('chart-monthly-trend', trend.labels, trend.values, { color: '#2f6b4f' });
   drawBarChart('chart-area-compare', AREAS.map(a => a.name.split(' ')[0]), AREAS.map(a => areaCollected(a.name, mKey)), { color: '#c98a3b' });
+  drawBarChart('chart-collection-rate', AREAS.map(a => a.name.split(' ')[0]), AREAS.map(a => {
+    const row = thisMonthStmt.byArea[a.name];
+    if (!row || row.billed <= 0) return row && row.collected > 0 ? 100 : 0;
+    return Math.round(row.collected / row.billed * 100);
+  }), { color: '#4a7c59' });
   drawPieChart('chart-tenant-status', ['Active', 'Vacated'], [activeTenants, vacatedTenants], ['#2f6b4f', '#c98a3b']);
   drawPieChart('chart-collected-vs-owed', ['Collected This Month', 'Outstanding Balance'], [thisMonthCollected, totalOwed], ['#2f6b4f', '#c94b3b']);
   renderTopTenants();
@@ -1968,12 +2037,14 @@ function renderLedger() {
     const receiptBtn = (l.type === 'Payment' && t && t.whatsapp)
       ? `<button class="btn small whatsapp" onclick="sendReceipt('${l.id}')">Send Receipt</button>`
       : (l.type === 'Payment' ? `<span style="font-size:0.7rem;color:var(--muted);">no WhatsApp #</span>` : '');
-    const editBtn = l.type === 'Payment' ? `<button class="icon-btn" onclick="editLedgerPayment('${l.id}')">✏️</button>` : '';
+    const editBtn = l.type === 'Payment' ? `<button class="icon-btn" onclick="editLedgerPayment('${l.id}')">✏️</button>`
+      : l.type === 'Charge' ? `<button class="icon-btn" onclick="editLedgerCharge('${l.id}')">✏️</button>` : '';
+    const typeLabel = (l.type === 'Charge' && l.note === 'Opening balance') ? 'Opening Balance' : l.type;
     return `<tr>
       <td>${l.date}</td>
       <td>${t ? escapeHtml(t.area) : '—'}</td>
       <td>${t ? escapeHtml(t.name) : '—'}</td>
-      <td>${l.type}</td>
+      <td>${escapeHtml(typeLabel)}</td>
       <td>${fmt(l.amount)}</td>
       <td>${escapeHtml(l.receivedBy || '')}</td>
       <td>${escapeHtml(l.paidBy || '')}</td>
@@ -2126,7 +2197,7 @@ function updatePaymentSaveState() {
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => activateView(btn.dataset.view));
+  btn.addEventListener('click', () => { activateView(btn.dataset.view); closeDrawer(); });
 });
 document.getElementById('payment-area').addEventListener('change', populatePaymentTenantSelect);
 document.getElementById('payment-tenant').addEventListener('change', updatePaymentSaveState);
@@ -2703,6 +2774,7 @@ document.getElementById('add-tenant-btn').addEventListener('click', () => {
   document.getElementById('tenant-opening-balance').value = '';
   document.getElementById('tenant-status').value = 'Active';
   document.getElementById('tenant-rent-note').style.display = 'none';
+  document.getElementById('tenant-opening-balance-wrap').style.display = 'block';
   updateTenantSaveState();
   tenantModalBg.classList.add('active');
 });
@@ -2723,6 +2795,7 @@ window.editTenant = function(id) {
   document.getElementById('tenant-opening-balance').value = '';
   document.getElementById('tenant-status').value = t.status;
   document.getElementById('tenant-rent-note').style.display = 'block';
+  document.getElementById('tenant-opening-balance-wrap').style.display = 'none';
   updateTenantSaveState();
   tenantModalBg.classList.add('active');
 };
@@ -2919,6 +2992,28 @@ window.addExtraCharge = async function(tenantId) {
   ledger.push(entry);
   renderAll();
   await fsSetLedger(entry);
+  auditLog(`Added a charge of ${fmt(amount)} for ${t.name} — ${t.unit}${note ? ' (' + note + ')' : ''}`, t.area);
+};
+
+// Opening balances (set once, on "Add Tenant") and other extra charges are both stored as
+// Charge-type ledger entries, same as any other ledger row — so this is how either gets
+// corrected after the fact, since the Add/Edit Tenant form itself never shows this again.
+window.editLedgerCharge = async function(id) {
+  const entry = ledger.find(x => x.id === id);
+  if (!entry) return;
+  const t = tenants.find(x => x.id === entry.tenantId);
+  const amountStr = prompt('New amount for this charge (UGX):', String(entry.amount));
+  if (amountStr === null) return;
+  const amount = Number(amountStr);
+  if (!amount) { alert('Please enter a valid number.'); return; }
+  const note = prompt('Note for this charge:', entry.note || '');
+  if (note === null) return;
+  const updated = { ...entry, amount, note };
+  const idx = ledger.findIndex(x => x.id === id);
+  ledger[idx] = updated;
+  renderAll();
+  await fsSetLedger(updated);
+  auditLog(`Edited a charge for ${t ? t.name : 'a tenant'} to ${fmt(amount)}${note ? ' (' + note + ')' : ''}`, t && t.area);
 };
 
 window.deleteLedgerEntry = async function(id) {
