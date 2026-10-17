@@ -37,8 +37,6 @@
   nav button.active { opacity: 1; border-bottom: 3px solid var(--accent); font-weight: 600; }
 
   .menu-btn { position: absolute; left: 16px; top: max(16px, env(safe-area-inset-top)); background: none; border: none; color: white; font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 4px 6px; }
-  .fin-statement-banner { padding: 12px 16px 0; max-width: 1100px; margin: 0 auto; }
-  .fin-statement-banner .btn { font-size: 1rem; padding: 14px; }
 
   .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
   .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
@@ -93,6 +91,9 @@
   .btn.secondary { background: var(--muted); }
   .btn.danger { background: var(--danger); }
   .btn.whatsapp { background: #25976a; }
+  .btn.whatsapp.not-sent { background: #8a94a6; }
+  .btn.whatsapp.sent-once { background: #25976a; }
+  .btn.whatsapp.sent-many { background: #c98a3b; }
   .btn.small { padding: 5px 9px; font-size: 0.75rem; }
   .btn:active { opacity: 0.85; }
 
@@ -306,19 +307,17 @@
   <button class="drawer-item tab-btn" data-view="activities">Activity Log</button>
   <button class="drawer-item tab-btn chief-only" data-view="settings" style="display:none;">Payment Settings</button>
   <button class="drawer-item tab-btn chief-only" data-view="admins" style="display:none;">Admins</button>
+  <button class="drawer-item" id="drawer-backup-btn">⬇️ Backup Data</button>
+  <button class="drawer-item chief-only" id="drawer-restore-btn" style="display:none;">⬆️ Restore Data</button>
 </div>
 
 <header>
   <button class="menu-btn" id="menu-btn" aria-label="Menu">☰</button>
   <h1>🏠 NAMUYIMBA and SONS</h1>
-  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="backup-btn">backup data</button> <span class="chief-only" style="display:none;">&nbsp;·&nbsp; <button class="back-link" id="restore-btn">restore data</button></span> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
+  <p>Property Dashboard — Rentals, Balances &amp; Complaints &nbsp;·&nbsp; <button class="back-link" id="admin-back">switch role</button> &nbsp;·&nbsp; <button class="back-link" id="notif-btn">🔔 enable notifications</button></p>
   <input type="file" id="restore-file-input" accept="application/json" style="display:none;">
   <p id="admin-session-label" style="font-size:0.75rem; color:var(--muted); margin-top:4px;"></p>
 </header>
-
-<div class="fin-statement-banner">
-  <button class="btn" id="financial-statement-btn" style="width:100%;">📊 Open Financial Statement</button>
-</div>
 
 <nav>
   <button class="tab-btn active" data-view="overview">Overview</button>
@@ -1654,7 +1653,6 @@ function openFinancialStatementModal() {
   document.getElementById('financial-statement-modal-bg').classList.add('active');
   closeDrawer();
 }
-document.getElementById('financial-statement-btn').addEventListener('click', openFinancialStatementModal);
 document.getElementById('drawer-fin-btn').addEventListener('click', openFinancialStatementModal);
 
 // ---- Side drawer (mirrors the horizontal nav, plus Financial Statement) ----
@@ -2035,7 +2033,13 @@ function renderLedger() {
   body.innerHTML = rows.map(l => {
     const t = tenants.find(x => x.id === l.tenantId);
     const receiptBtn = (l.type === 'Payment' && t && t.whatsapp)
-      ? `<button class="btn small whatsapp" onclick="sendReceipt('${l.id}')">Send Receipt</button>`
+      ? (() => {
+          const n = l.receiptSentCount || 0;
+          const stateClass = n === 0 ? 'not-sent' : (n === 1 ? 'sent-once' : 'sent-many');
+          const label = n === 0 ? 'Send Receipt' : (n === 1 ? '✓ Sent' : `✓ Sent ×${n}`);
+          const title = n > 0 && l.receiptLastSentAt ? ` title="Last sent ${l.receiptLastSentAt}"` : ' title="Not sent yet"';
+          return `<button class="btn small whatsapp ${stateClass}" onclick="sendReceipt('${l.id}')"${title}>${label}</button>`;
+        })()
       : (l.type === 'Payment' ? `<span style="font-size:0.7rem;color:var(--muted);">no WhatsApp #</span>` : '');
     const editBtn = l.type === 'Payment' ? `<button class="icon-btn" onclick="editLedgerPayment('${l.id}')">✏️</button>`
       : l.type === 'Charge' ? `<button class="icon-btn" onclick="editLedgerCharge('${l.id}')">✏️</button>` : '';
@@ -2417,7 +2421,6 @@ document.getElementById('gate-password-submit').addEventListener('click', async 
     activateView('overview');
     loadData();
     loadAdminList();
-    auditLog('Logged in');
   } else {
     document.getElementById('gate-error').style.display = 'block';
   }
@@ -2447,7 +2450,6 @@ document.getElementById('gate-tenant').addEventListener('click', () => {
 document.getElementById('tenant-back').addEventListener('click', goBackToGate);
 document.getElementById('tenant-back-top').addEventListener('click', goBackToGate);
 document.getElementById('admin-back').addEventListener('click', () => {
-  if (currentAdminName) auditLog('Logged out');
   currentAdminName = '';
   applyRolePermissions();
   document.getElementById('app-shell').style.display = 'none';
@@ -2457,7 +2459,8 @@ document.getElementById('admin-back').addEventListener('click', () => {
   document.getElementById('role-gate').style.display = 'flex';
 });
 
-document.getElementById('backup-btn').addEventListener('click', async () => {
+document.getElementById('drawer-backup-btn').addEventListener('click', async () => {
+  closeDrawer();
   let liveCounter = receiptCounter;
   try {
     const counterDoc = await db.collection('meta').doc('counters').get();
@@ -2475,7 +2478,8 @@ document.getElementById('backup-btn').addEventListener('click', async () => {
   URL.revokeObjectURL(url);
 });
 
-document.getElementById('restore-btn').addEventListener('click', () => {
+document.getElementById('drawer-restore-btn').addEventListener('click', () => {
+  closeDrawer();
   document.getElementById('restore-file-input').click();
 });
 document.getElementById('restore-file-input').addEventListener('change', (e) => {
@@ -3083,7 +3087,13 @@ window.sendReceipt = async function(ledgerId) {
   const phone = normalizePhone(t.whatsapp);
   alert('The receipt image has been downloaded. WhatsApp will now open with a message — please attach the downloaded receipt image to the chat before sending, since WhatsApp links can\'t attach images automatically.');
   openExternalLink(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`);
+
+  // Track how many times this receipt has been sent, so the button's color/label can show
+  // not sent / sent / sent again at a glance.
+  l.receiptSentCount = (l.receiptSentCount || 0) + 1;
+  l.receiptLastSentAt = todayStr();
   renderAll();
+  await fsSetLedger(l);
 };
 
 window.resolveComplaint = async function(id) {
