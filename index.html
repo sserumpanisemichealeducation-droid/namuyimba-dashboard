@@ -58,6 +58,8 @@
   .card .label { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
   .card.owed .num { color: var(--danger); }
   .card.top .num { font-size: 1.05rem; color: var(--accent); }
+  .card.vacated-owed { background: #eceef0; border-color: #c7ccd1; }
+  .card.vacated-owed .num { color: #5b6672; }
 
   .area-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 20px; }
   .admin-row { display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:8px; }
@@ -91,9 +93,9 @@
   .btn.secondary { background: var(--muted); }
   .btn.danger { background: var(--danger); }
   .btn.whatsapp { background: #25976a; }
-  .btn.whatsapp.not-sent { background: #8a94a6; }
-  .btn.whatsapp.sent-once { background: #25976a; }
-  .btn.whatsapp.sent-many { background: #c98a3b; }
+  .btn.whatsapp.rc-never { background: #25976a; }
+  .btn.whatsapp.rc-few { background: #c98a3b; }
+  .btn.whatsapp.rc-many { background: #8a94a6; }
   .btn.small { padding: 5px 9px; font-size: 0.75rem; }
   .btn:active { opacity: 0.85; }
 
@@ -110,6 +112,8 @@
   .badge.active { background: #e3f0e8; color: var(--ok); }
   .badge.vacated { background: #eee; color: var(--muted); }
   .badge.owed { background: #fbe7e5; color: var(--danger); }
+  .badge.vacated-owed { background: #dde1e5; color: #5b6672; }
+  .balance-card.gray-card { border-left: 4px solid #8a94a6; }
   .badge.clear { background: #e3f0e8; color: var(--ok); }
   .badge.pending { background: #fbeedd; color: var(--warn); }
   .badge.new { background: #fbe7e5; color: var(--danger); }
@@ -407,6 +411,23 @@
     <div id="balances-list"></div>
   </div>
 
+  <div id="view-vacated-owed" class="view">
+    <button class="back-link-inline" onclick="activateView('overview')">← Back to Overview</button>
+    <div class="section-title" style="margin-top:0;">Owed by Tenants Who Left — by Tenant &amp; Month</div>
+    <p style="font-size:0.82rem; color:var(--muted); margin-top:-6px;">These tenants vacated while still owing money. It's kept separate from "Total Owed" since it isn't money you can expect from someone still renting — this is what's left to chase down or write off.</p>
+    <div class="filter-row">
+      <select id="vacated-owed-area-filter">
+        <option value="">All areas</option>
+        <option value="Kiwenda">Kiwenda</option>
+        <option value="Watuba">Watuba</option>
+        <option value="Wankulukuku Guest House">Wankulukuku Guest House</option>
+        <option value="Bunamwaya">Bunamwaya</option>
+      </select>
+      <input id="vacated-owed-search" class="search-input" placeholder="🔍 Search by tenant or unit...">
+    </div>
+    <div id="vacated-owed-list"></div>
+  </div>
+
   <div id="view-payments" class="view">
     <div class="section-title" style="margin:0 0 10px;">Payments Reported by Tenants (Awaiting Confirmation)</div>
     <input id="claims-search" class="search-input" style="margin-bottom:10px;" placeholder="🔍 Search by tenant, area, or reference...">
@@ -604,7 +625,7 @@
       <div class="section-title" style="font-size:0.95rem;">By Area</div>
       <div class="table-wrap">
         <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
-          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Area</th><th style="padding:4px 6px; text-align:right;">Billed</th><th style="padding:4px 6px; text-align:right;">Collected</th><th style="padding:4px 6px; text-align:right;">Collection %</th><th style="padding:4px 6px; text-align:right;">Outstanding (now)</th></tr></thead>
+          <thead><tr style="text-align:left; border-bottom:2px solid var(--border);"><th style="padding:4px 6px;">Area</th><th style="padding:4px 6px; text-align:right;">Billed</th><th style="padding:4px 6px; text-align:right;">Collected</th><th style="padding:4px 6px; text-align:right;">Collection %</th><th style="padding:4px 6px; text-align:right;">Outstanding (current)</th><th style="padding:4px 6px; text-align:right;">Outstanding (left)</th></tr></thead>
           <tbody id="fin-area-body"></tbody>
         </table>
       </div>
@@ -1562,7 +1583,10 @@ function computeFinancialStatement(fromDate, toDate) {
   const totalCharges = periodCharges.reduce((s,l) => s + Number(l.amount), 0);
 
   const byArea = {};
-  AREAS.forEach(a => byArea[a.name] = { billed: 0, collected: 0, outstanding: 0 });
+  // Outstanding is split the same way as the Overview: Active tenants' balances are money
+  // you can still reasonably expect; Vacated tenants' balances are tracked separately, since
+  // that's what's left to chase down or write off, not a live expectation.
+  AREAS.forEach(a => byArea[a.name] = { billed: 0, collected: 0, outstandingActive: 0, outstandingVacated: 0 });
   let totalBilled = 0;
 
   tenants.forEach(t => {
@@ -1580,10 +1604,13 @@ function computeFinancialStatement(fromDate, toDate) {
     byArea[t.area].collected += ledger
       .filter(l => l.tenantId === t.id && l.type === 'Payment' && inPeriod(l.date))
       .reduce((s,l) => s + Number(l.amount), 0);
-    byArea[t.area].outstanding += Math.max(0, tenantBalance(t.id));
+    const bal = Math.max(0, tenantBalance(t.id));
+    if (t.status === 'Active') byArea[t.area].outstandingActive += bal;
+    else byArea[t.area].outstandingVacated += bal;
   });
 
-  const totalOutstanding = tenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+  const totalOutstandingActive = tenants.filter(t => t.status === 'Active').reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+  const totalOutstandingVacated = tenants.filter(t => t.status !== 'Active').reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
 
   const methodTotals = {};
   periodPayments.forEach(l => {
@@ -1597,7 +1624,7 @@ function computeFinancialStatement(fromDate, toDate) {
   });
 
   const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled * 100) : (totalCollected > 0 ? 100 : 0);
-  return { totalBilled, totalCollected, totalCharges, totalOutstanding, collectionRate, byArea, methodTotals, occupancy };
+  return { totalBilled, totalCollected, totalCharges, totalOutstandingActive, totalOutstandingVacated, collectionRate, byArea, methodTotals, occupancy };
 }
 
 function renderFinancialStatement() {
@@ -1612,7 +1639,8 @@ function renderFinancialStatement() {
     <div class="card"><div class="num">${fmt(stmt.totalBilled)}</div><div class="label">Rent Billed (period)</div></div>
     <div class="card"><div class="num">${fmt(stmt.totalCollected)}</div><div class="label">Collected (period)</div></div>
     <div class="card"><div class="num">${Math.round(stmt.collectionRate)}%</div><div class="label">Collection Rate</div></div>
-    <div class="card owed"><div class="num">${fmt(stmt.totalOutstanding)}</div><div class="label">Outstanding (now)</div></div>
+    <div class="card owed"><div class="num">${fmt(stmt.totalOutstandingActive)}</div><div class="label">Outstanding — Current Tenants (now)</div></div>
+    <div class="card vacated-owed"><div class="num">${fmt(stmt.totalOutstandingVacated)}</div><div class="label">Outstanding — Tenants Who Left (now)</div></div>
     ${stmt.totalCharges > 0 ? `<div class="card"><div class="num">${fmt(stmt.totalCharges)}</div><div class="label">Other Charges (period)</div></div>` : ''}
   `;
 
@@ -1624,7 +1652,8 @@ function renderFinancialStatement() {
       <td style="padding:4px 6px; text-align:right;">${fmt(row.billed)}</td>
       <td style="padding:4px 6px; text-align:right;">${fmt(row.collected)}</td>
       <td style="padding:4px 6px; text-align:right;">${pct === null ? '—' : pct + '%'}</td>
-      <td style="padding:4px 6px; text-align:right;">${fmt(row.outstanding)}</td>
+      <td style="padding:4px 6px; text-align:right;">${fmt(row.outstandingActive)}</td>
+      <td style="padding:4px 6px; text-align:right; color:#5b6672;">${fmt(row.outstandingVacated)}</td>
     </tr>`;
   }).join('');
 
@@ -1683,20 +1712,10 @@ document.getElementById('fin-to').addEventListener('change', renderFinancialStat
 document.getElementById('financial-statement-close').addEventListener('click', () => document.getElementById('financial-statement-modal-bg').classList.remove('active'));
 document.getElementById('financial-statement-print').addEventListener('click', () => window.print());
 
-function renderBalancesView() {
-  const box = document.getElementById('balances-list');
-  if (!box) return;
-  const areaFilter = document.getElementById('balances-area-filter').value;
-  const q = document.getElementById('balances-search').value;
-  let list = tenants.filter(t => tenantBalance(t.id) > 0);
-  if (areaFilter) list = list.filter(t => t.area === areaFilter);
-  list = list.filter(t => matchesSearch([t.name, t.unit, t.area], q));
-  list.sort((a,b) => tenantBalance(b.id) - tenantBalance(a.id));
-  if (!list.length) {
-    box.innerHTML = `<p class="empty" style="padding:20px 0;">${tenants.some(t => tenantBalance(t.id) > 0) ? 'No tenants with a balance match this filter.' : 'No tenant currently owes a balance. 🎉'}</p>`;
-    return;
-  }
-  box.innerHTML = list.map(t => {
+// Shared card markup for both the (active-tenant) Balances view and the Vacated-Owed view —
+// same month-by-month structure either way; `gray` just switches the color treatment.
+function buildBalanceCardsHtml(list, gray) {
+  return list.map(t => {
     const b = getTenantOwedBreakdown(t.id);
     const monthRows = b.months.map(m => `
       <div class="balance-month-row">
@@ -1709,12 +1728,12 @@ function renderBalancesView() {
         <span>${fmt(b.extraCharges)}</span>
       </div>` : '';
     return `
-    <div class="balance-card">
+    <div class="balance-card${gray ? ' gray-card' : ''}">
       <div class="balance-card-head">
         <div>
-          <strong>${escapeHtml(t.name)}</strong> — ${escapeHtml(t.unit)}, ${escapeHtml(t.area)}
+          <strong>${escapeHtml(t.name)}</strong> — ${escapeHtml(t.unit)}, ${escapeHtml(t.area)}${gray ? ' <span style="color:var(--muted); font-size:0.8rem;">(vacated)</span>' : ''}
         </div>
-        <span class="badge owed">${fmt(b.total)}</span>
+        <span class="badge ${gray ? 'vacated-owed' : 'owed'}">${fmt(b.total)}</span>
       </div>
       ${monthRows}${chargeRow}
       <div class="row-actions" style="margin-top:8px;">
@@ -1724,11 +1743,44 @@ function renderBalancesView() {
   }).join('');
 }
 
+function renderBalancesView() {
+  const box = document.getElementById('balances-list');
+  if (!box) return;
+  const areaFilter = document.getElementById('balances-area-filter').value;
+  const q = document.getElementById('balances-search').value;
+  let list = tenants.filter(t => t.status === 'Active' && tenantBalance(t.id) > 0);
+  if (areaFilter) list = list.filter(t => t.area === areaFilter);
+  list = list.filter(t => matchesSearch([t.name, t.unit, t.area], q));
+  list.sort((a,b) => tenantBalance(b.id) - tenantBalance(a.id));
+  if (!list.length) {
+    box.innerHTML = `<p class="empty" style="padding:20px 0;">${tenants.some(t => t.status === 'Active' && tenantBalance(t.id) > 0) ? 'No tenants with a balance match this filter.' : 'No current tenant owes a balance. 🎉'}</p>`;
+    return;
+  }
+  box.innerHTML = buildBalanceCardsHtml(list, false);
+}
+
+function renderVacatedOwedView() {
+  const box = document.getElementById('vacated-owed-list');
+  if (!box) return;
+  const areaFilter = document.getElementById('vacated-owed-area-filter').value;
+  const q = document.getElementById('vacated-owed-search').value;
+  let list = tenants.filter(t => t.status !== 'Active' && tenantBalance(t.id) > 0);
+  if (areaFilter) list = list.filter(t => t.area === areaFilter);
+  list = list.filter(t => matchesSearch([t.name, t.unit, t.area], q));
+  list.sort((a,b) => tenantBalance(b.id) - tenantBalance(a.id));
+  if (!list.length) {
+    box.innerHTML = `<p class="empty" style="padding:20px 0;">${tenants.some(t => t.status !== 'Active' && tenantBalance(t.id) > 0) ? 'No vacated tenants with a balance match this filter.' : 'No tenant who left owes anything. 🎉'}</p>`;
+    return;
+  }
+  box.innerHTML = buildBalanceCardsHtml(list, true);
+}
+
 function renderAll() {
   renderOverview();
   renderMonthly();
   renderTenants();
   renderBalancesView();
+  renderVacatedOwedView();
   renderLedger();
   renderPaymentClaims();
   renderComplaints();
@@ -1745,6 +1797,7 @@ function activateView(viewName) {
   if (viewName === 'overview') renderOverview();
   if (viewName === 'monthly') renderMonthly();
   if (viewName === 'balances') renderBalancesView();
+  if (viewName === 'vacated-owed') renderVacatedOwedView();
   if (viewName === 'settings') loadSettingsForm();
   if (viewName === 'admins') loadAdminList();
 }
@@ -1900,7 +1953,11 @@ function renderOverview() {
   // Reused below for both the area cards' Collection % and the Collection Rate chart —
   // "billed" is rent that actually came due this month per tenant's own billing cycle.
   const thisMonthStmt = computeFinancialStatement(new Date(now.getFullYear(), now.getMonth(), 1), now);
-  const totalOwed = tenants.reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+  // "Total Owed" is money you can still reasonably expect — only from tenants still renting.
+  // What a tenant owed on their way out is tracked separately (see totalVacatedOwed below),
+  // since it isn't the same kind of expectation.
+  const totalOwed = tenants.filter(t => t.status === 'Active').reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
+  const totalVacatedOwed = tenants.filter(t => t.status !== 'Active').reduce((s,t) => s + Math.max(0, tenantBalance(t.id)), 0);
   const newComplaints = complaints.filter(c => c.status !== 'Resolved').length;
   const pendingClaims = paymentClaims.filter(c => c.status === 'Pending').length;
 
@@ -1915,6 +1972,7 @@ function renderOverview() {
     <div class="card" onclick="activateView('payments')"><div class="num">${fmt(totalCollected)}</div><div class="label">Total Collected (All-Time)</div></div>
     <div class="card" onclick="activateView('monthly')"><div class="num">${fmt(thisMonthCollected)}</div><div class="label">Collected This Month</div></div>
     <div class="card owed" onclick="activateView('balances')"><div class="num">${fmt(totalOwed)}</div><div class="label">Total Owed (Balances)</div></div>
+    <div class="card vacated-owed" onclick="activateView('vacated-owed')"><div class="num">${fmt(totalVacatedOwed)}</div><div class="label">🚪 Owed by Tenants Who Left</div></div>
     <div class="card" onclick="activateView('complaints')"><div class="num">${newComplaints}</div><div class="label">Open Complaints</div></div>
     <div class="card${pendingClaims ? ' owed' : ''}" onclick="activateView('payments')"><div class="num">${pendingClaims}</div><div class="label">Payment Reports from Tenants</div></div>
     <div class="card top"><div class="num">${bestAmount > 0 ? escapeHtml(bestArea) : '—'}</div><div class="label">Top Area This Month${bestAmount > 0 ? ' (' + fmt(bestAmount) + ')' : ''}</div></div>
@@ -2035,8 +2093,8 @@ function renderLedger() {
     const receiptBtn = (l.type === 'Payment' && t && t.whatsapp)
       ? (() => {
           const n = l.receiptSentCount || 0;
-          const stateClass = n === 0 ? 'not-sent' : (n === 1 ? 'sent-once' : 'sent-many');
-          const label = n === 0 ? 'Send Receipt' : (n === 1 ? '✓ Sent' : `✓ Sent ×${n}`);
+          const stateClass = n === 0 ? 'rc-never' : (n <= 2 ? 'rc-few' : 'rc-many');
+          const label = n === 0 ? 'Send Receipt' : `✓ Sent ×${n}`;
           const title = n > 0 && l.receiptLastSentAt ? ` title="Last sent ${l.receiptLastSentAt}"` : ' title="Not sent yet"';
           return `<button class="btn small whatsapp ${stateClass}" onclick="sendReceipt('${l.id}')"${title}>${label}</button>`;
         })()
@@ -3191,6 +3249,8 @@ document.getElementById('complaint-search').addEventListener('input', renderComp
 document.getElementById('activity-search').addEventListener('input', renderActivities);
 document.getElementById('balances-search').addEventListener('input', renderBalancesView);
 document.getElementById('balances-area-filter').addEventListener('change', renderBalancesView);
+document.getElementById('vacated-owed-search').addEventListener('input', renderVacatedOwedView);
+document.getElementById('vacated-owed-area-filter').addEventListener('change', renderVacatedOwedView);
 </script>
 
 </body>
